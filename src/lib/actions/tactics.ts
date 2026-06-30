@@ -1,0 +1,200 @@
+'use server'
+
+import { z } from 'zod'
+import { revalidatePath } from 'next/cache'
+import { requireProfile } from '@/lib/auth/session'
+import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getAllowedNext, STATUS_LABEL } from '@/lib/tactics-utils'
+import { insertNotification } from '@/lib/actions/notifications'
+import type { TacticStatus } from '@/lib/types'
+
+const TacticInputSchema = z.object({
+  title:           z.string().min(1, 'Title is required').max(200),
+  description:     z.string().max(2000).optional().nullable(),
+  project_id:      z.string().uuid().optional().nullable(),
+  assigned_to:     z.string().uuid('Select an employee'),
+  priority:        z.enum(['low', 'medium', 'high', 'critical']),
+  due_date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  estimated_hours: z.number().positive().max(9999).optional().nullable(),
+})
+
+export type TacticInput = z.infer<typeof TacticInputSchema>
+
+export async function createTactic(raw: TacticInput) {
+  const profile = await requireProfile()
+  if (!['admin', 'manager'].includes(profile.role)) throw new Error('Unauthorized')
+
+  const input = TacticInputSchema.parse(raw)
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('tactics')
+    .insert({
+      title:           input.title,
+      description:     input.description     ?? null,
+      project_id:      input.project_id      ?? null,
+      assigned_to:     input.assigned_to,
+      created_by:      profile.id,
+      priority:        input.priority,
+      due_date:        input.due_date         ?? null,
+      estimated_hours: input.estimated_hours  ?? null,
+      status:          'assigned',
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:   data.id,
+    employee_id: profile.id,
+    action:      'Tactic created',
+  })
+
+  // Notify the assigned employee (skip self-assignment)
+  if (input.assigned_to !== profile.id) {
+    await insertNotification(
+      input.assigned_to,
+      'tactic_assigned',
+      `You've been assigned a new task: "${input.title}"`,
+      `/tactics/${data.id}`,
+    )
+  }
+
+  revalidatePath('/tactics')
+  revalidatePath('/kanban')
+  return data
+}
+
+export async function updateTactic(id: string, raw: TacticInput) {
+  const profile = await requireProfile()
+  if (!['admin', 'manager'].includes(profile.role)) throw new Error('Unauthorized')
+
+  const input = TacticInputSchema.parse(raw)
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('tactics')
+    .update({
+      title:           input.title,
+      description:     input.description     ?? null,
+      project_id:      input.project_id      ?? null,
+      assigned_to:     input.assigned_to,
+      priority:        input.priority,
+      due_date:        input.due_date         ?? null,
+      estimated_hours: input.estimated_hours  ?? null,
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:   id,
+    employee_id: profile.id,
+    action:      'Tactic updated',
+  })
+
+  revalidatePath('/tactics')
+  revalidatePath(`/tactics/${id}`)
+  revalidatePath('/kanban')
+  return data
+}
+
+export async function transitionStatus(
+  tacticId: string,
+  targetStatus: TacticStatus,
+  comment?: string,
+) {
+  const profile = await requireProfile()
+  const supabase = await createClient()
+
+  const { data: tactic, error: fetchErr } = await supabase
+    .from('tactics')
+    .select('id, title, status, assigned_to, created_by')
+    .eq('id', tacticId)
+    .single()
+
+  if (fetchErr || !tactic) throw new Error('Tactic not found or access denied')
+
+  const currentStatus = tactic.status as TacticStatus
+  const allowed = getAllowedNext(currentStatus, profile.role)
+
+  if (!allowed.includes(targetStatus)) {
+    throw new Error(
+      `Cannot transition from "${STATUS_LABEL[currentStatus]}" to "${STATUS_LABEL[targetStatus]}"`,
+    )
+  }
+
+  if (currentStatus === 'review' && targetStatus === 'in_progress' && !comment?.trim()) {
+    throw new Error('A reason is required when sending a tactic back to In Progress')
+  }
+
+  const { error: updateErr } = await supabase
+    .from('tactics')
+    .update({ status: targetStatus })
+    .eq('id', tacticId)
+
+  if (updateErr) throw new Error(updateErr.message)
+
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:   tacticId,
+    employee_id: profile.id,
+    action:      `Status changed to ${STATUS_LABEL[targetStatus]}`,
+    notes:       comment?.trim() || null,
+  })
+
+  // Notify assigned employee about any status change (skip if they did it themselves)
+  if (tactic.assigned_to !== profile.id) {
+    await insertNotification(
+      tactic.assigned_to,
+      'tactic_status',
+      `"${tactic.title}" moved to ${STATUS_LABEL[targetStatus]}`,
+      `/tactics/${tacticId}`,
+    )
+  }
+
+  // When submitted for review, notify the creator (manager/admin) as well
+  if (targetStatus === 'review' && tactic.created_by !== profile.id) {
+    await insertNotification(
+      tactic.created_by,
+      'tactic_review',
+      `"${tactic.title}" is ready for your review`,
+      `/tactics/${tacticId}`,
+    )
+  }
+
+  revalidatePath('/tactics')
+  revalidatePath(`/tactics/${tacticId}`)
+  revalidatePath('/kanban')
+  return { status: targetStatus }
+}
+
+export async function logHours(
+  tacticId: string,
+  { hours, notes }: { hours: number; notes?: string },
+) {
+  const profile = await requireProfile()
+  if (hours <= 0 || hours > 24) throw new Error('Hours must be between 0.1 and 24')
+
+  const supabase = await createClient()
+  const { data: tactic } = await supabase
+    .from('tactics')
+    .select('id')
+    .eq('id', tacticId)
+    .single()
+
+  if (!tactic) throw new Error('Tactic not found or access denied')
+
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:    tacticId,
+    employee_id:  profile.id,
+    action:       `Logged ${hours}h`,
+    hours_logged: hours,
+    notes:        notes?.trim() || null,
+  })
+
+  revalidatePath(`/tactics/${tacticId}`)
+}
