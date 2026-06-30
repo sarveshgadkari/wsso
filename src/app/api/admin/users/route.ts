@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { sendSetPasswordEmail } from '@/lib/email/send-set-password-email'
 
 const createUserSchema = z.object({
   email:       z.string().email('Valid email required'),
@@ -126,26 +127,32 @@ export async function POST(request: NextRequest) {
 
   const setPasswordLink = linkData?.properties?.action_link ?? null
 
-  // ── 7. Welcome email — placeholder (wire Resend in a later prompt) ──────────
-  console.log(`
-╔══════════════════════════════════════════════════════════╗
-║              WELCOME EMAIL  (placeholder)                ║
-╠══════════════════════════════════════════════════════════╣
-║  To:            ${email.padEnd(42)}║
-║  Name:          ${full_name.padEnd(42)}║
-║  Role:          ${role.padEnd(42)}║
-║  Employee code: ${profile.employee_code.padEnd(42)}║
-╠══════════════════════════════════════════════════════════╣
-║  Set your password:                                      ║
-║  ${(setPasswordLink ?? '(link generation failed)').slice(0, 56).padEnd(56)}║
-╚══════════════════════════════════════════════════════════╝
-  `)
+  // ── 7. Email the employee a set-password link ───────────────────────────────
+  const emailResult = await sendSetPasswordEmail({
+    email,
+    fullName:        full_name,
+    role,
+    employeeCode:    profile.employee_code,
+    setPasswordLink,
+  })
+
+  if (!emailResult.sent) {
+    console.error('[createUser] welcome email failed:', emailResult.error)
+    if (setPasswordLink) {
+      console.log('[createUser] manual set-password link:', setPasswordLink)
+    }
+  }
 
   return NextResponse.json(
     {
       profile,
-      set_password_link: setPasswordLink,
-      message: 'User created. Welcome email logged to console (Resend integration pending).',
+      email_sent:        emailResult.sent,
+      email_method:      emailResult.method,
+      email_error:       emailResult.error ?? null,
+      set_password_link: emailResult.sent ? null : setPasswordLink,
+      message: emailResult.sent
+        ? 'User created. A set-password email was sent to the employee.'
+        : 'User created, but the welcome email could not be sent. Check email configuration or use the set_password_link.',
     },
     { status: 201 }
   )

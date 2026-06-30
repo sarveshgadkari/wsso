@@ -319,29 +319,32 @@ export type Database = {
       activity_logs: {
         Row: {
           id: string
-          tactic_id: string
+          tactic_id: string | null   // nullable: non-tactic events (e.g. force clock-out)
           employee_id: string
           action: string
           hours_logged: number | null
           notes: string | null
+          meta: Record<string, unknown> | null
           created_at: string
         }
         Insert: {
           id?: string
-          tactic_id: string
+          tactic_id?: string | null
           employee_id: string
           action: string
           hours_logged?: number | null
           notes?: string | null
+          meta?: Record<string, unknown> | null
           created_at?: string
         }
         Update: {
           id?: string
-          tactic_id?: string
+          tactic_id?: string | null
           employee_id?: string
           action?: string
           hours_logged?: number | null
           notes?: string | null
+          meta?: Record<string, unknown> | null
         }
         Relationships: [
           {
@@ -367,7 +370,8 @@ export type Database = {
           clock_out_at: string | null
           duration_minutes: number | null   // set by trigger
           closed_reason: Database['public']['Enums']['clock_close_reason'] | null
-          log_date: string                  // generated column — ISO date
+          auto_closed: boolean              // true when closed by system/admin, not by the employee
+          log_date: string                  // set by trigger from clock_in_at
           created_at: string
         }
         Insert: {
@@ -377,7 +381,7 @@ export type Database = {
           clock_out_at?: string | null
           duration_minutes?: number | null  // normally omitted; trigger calculates it
           closed_reason?: Database['public']['Enums']['clock_close_reason'] | null
-          // log_date is a generated column — do NOT include in Insert
+          auto_closed?: boolean
           created_at?: string
         }
         Update: {
@@ -387,7 +391,7 @@ export type Database = {
           clock_out_at?: string | null
           duration_minutes?: number | null
           closed_reason?: Database['public']['Enums']['clock_close_reason'] | null
-          // log_date is generated — do NOT include in Update
+          auto_closed?: boolean
         }
         Relationships: [
           {

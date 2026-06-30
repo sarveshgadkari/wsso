@@ -3,21 +3,85 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth/session'
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function endOfDayUTC(isoDate: string): string {
+  // 23:59:00 UTC on the given date — used as auto-close cutoff
+  return `${isoDate}T23:59:00.000Z`
+}
+
+// ── Mechanism 2: close stale open sessions for a set of employees ─────────────
+// Called from server-component page data-fetching before rendering.
+// Closes any session with clock_out_at IS NULL and clock_in_at > 16 h ago.
+// Returns the number of sessions that were closed.
+
+export async function closeStaleSessionsForEmployees(
+  employeeIds: string[],
+): Promise<number> {
+  if (!employeeIds.length) return 0
+
+  const cutoff = new Date(Date.now() - 16 * 60 * 60 * 1000).toISOString()
+
+  const { data: stale } = await supabaseAdmin
+    .from('time_logs')
+    .select('id, log_date')
+    .in('employee_id', employeeIds)
+    .is('clock_out_at', null)
+    .lt('clock_in_at', cutoff)
+
+  if (!stale?.length) return 0
+
+  await Promise.all(
+    stale.map((s) =>
+      supabaseAdmin
+        .from('time_logs')
+        .update({
+          clock_out_at:  endOfDayUTC(s.log_date),
+          closed_reason: 'auto_logout',
+          auto_closed:   true,
+        })
+        .eq('id', s.id),
+    ),
+  )
+
+  return stale.length
+}
+
+// ── Clock In ──────────────────────────────────────────────────────────────────
+// Mechanism 1: before creating a new session, auto-close any open session from
+// a PREVIOUS day (stale).  If an open session exists from TODAY, block the
+// clock-in (user must clock out manually).
 
 export async function clockIn() {
   const profile = await requireProfile()
   const supabase = await createClient()
 
-  // Server-side guard — the partial unique index also enforces this at the DB level
-  const { data: existing } = await supabase
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data: existingSession } = await supabase
     .from('time_logs')
-    .select('id')
+    .select('id, log_date')
     .eq('employee_id', profile.id)
     .is('clock_out_at', null)
     .maybeSingle()
 
-  if (existing) return { error: 'Already clocked in — clock out first.' }
+  if (existingSession) {
+    if (existingSession.log_date === today) {
+      return { error: 'Already clocked in — clock out first.' }
+    }
+    // Previous-day stale session — auto-close at 11:59 PM of that day
+    await supabaseAdmin
+      .from('time_logs')
+      .update({
+        clock_out_at:  endOfDayUTC(existingSession.log_date),
+        closed_reason: 'auto_logout',
+        auto_closed:   true,
+      })
+      .eq('id', existingSession.id)
+  }
 
   const { data, error } = await supabase
     .from('time_logs')
@@ -32,6 +96,8 @@ export async function clockIn() {
   return { data }
 }
 
+// ── Clock Out ─────────────────────────────────────────────────────────────────
+
 export async function clockOut() {
   const profile = await requireProfile()
   const supabase = await createClient()
@@ -45,7 +111,6 @@ export async function clockOut() {
 
   if (!session) return { error: 'No open clock-in session found.' }
 
-  // _trg_calc_duration fires on UPDATE and fills duration_minutes from timestamps
   const { data, error } = await supabase
     .from('time_logs')
     .update({ clock_out_at: new Date().toISOString(), closed_reason: 'manual' })
@@ -60,6 +125,8 @@ export async function clockOut() {
   revalidatePath('/time/team')
   return { data }
 }
+
+// ── Admin: correct a completed time log ───────────────────────────────────────
 
 const correctionSchema = z.object({
   clock_in_at:  z.string().min(1),
@@ -87,8 +154,6 @@ export async function adminCorrectTimeLog(
   }
 
   const supabase = await createClient()
-
-  // DB trigger recomputes duration_minutes from the corrected timestamps
   const { data, error } = await supabase
     .from('time_logs')
     .update({
@@ -104,5 +169,70 @@ export async function adminCorrectTimeLog(
 
   revalidatePath('/time')
   revalidatePath('/time/team')
+  return { data }
+}
+
+// ── Mechanism 3: Force Clock Out (Admin / Manager) ────────────────────────────
+// Closes an open session with a provided clock-out time.
+// Session is tagged auto_closed = true + reason = admin_correction.
+// Action is audited to activity_logs (tactic_id nullable after migration).
+
+export async function forceClockOut(
+  timeLogId:   string,
+  clockOutAt:  string,
+  employeeId:  string,
+) {
+  const profile = await requireProfile()
+  if (!['admin', 'manager'].includes(profile.role)) {
+    return { error: 'Access denied.' }
+  }
+
+  const clockOut = new Date(clockOutAt)
+  if (isNaN(clockOut.getTime())) return { error: 'Invalid datetime.' }
+
+  // Verify the viewer can see this session (RLS enforces team scope for managers)
+  const supabase = await createClient()
+  const { data: session } = await supabase
+    .from('time_logs')
+    .select('id, clock_in_at')
+    .eq('id', timeLogId)
+    .eq('employee_id', employeeId)
+    .is('clock_out_at', null)
+    .single()
+
+  if (!session) return { error: 'Session not found or already closed.' }
+
+  const clockIn = new Date(session.clock_in_at)
+  if (clockOut <= clockIn) return { error: 'Clock-out must be after clock-in.' }
+
+  const { data, error } = await supabaseAdmin
+    .from('time_logs')
+    .update({
+      clock_out_at:  clockOut.toISOString(),
+      closed_reason: 'admin_correction',
+      auto_closed:   true,
+    })
+    .eq('id', timeLogId)
+    .select()
+    .single()
+
+  if (error) return { error: error.message }
+
+  // Audit trail — tactic_id is now nullable
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:   null,
+    employee_id: employeeId,
+    action:      'time_log.force_closed',
+    meta: {
+      closed_by:      profile.id,
+      closed_by_name: profile.full_name,
+      time_log_id:    timeLogId,
+      clock_out_at:   clockOut.toISOString(),
+    },
+  })
+
+  revalidatePath('/time/team')
+  revalidatePath(`/time/team/${employeeId}`)
+  revalidatePath(`/employees/${employeeId}`)
   return { data }
 }

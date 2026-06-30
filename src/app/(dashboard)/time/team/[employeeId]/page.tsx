@@ -3,8 +3,10 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { TimeLogTable, formatDuration } from '@/components/time/TimeLogTable'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
+import { ForceClockOutButton } from '@/components/time/ForceClockOutButton'
 
 interface Props {
   params: { employeeId: string }
@@ -49,15 +51,26 @@ export default async function EmployeeTimePage({ params }: Props) {
 
   if (!employee) notFound()
 
+  // Mechanism 2: close stale sessions for this employee before rendering
+  await closeStaleSessionsForEmployees([params.employeeId])
+
   const thirtyAgo = new Date()
   thirtyAgo.setDate(thirtyAgo.getDate() - 30)
 
-  const { data: logs } = await supabase
-    .from('time_logs')
-    .select('*')
-    .eq('employee_id', params.employeeId)
-    .gte('clock_in_at', thirtyAgo.toISOString())
-    .order('clock_in_at', { ascending: false })
+  const [{ data: logs }, { data: openSession }] = await Promise.all([
+    supabase
+      .from('time_logs')
+      .select('*')
+      .eq('employee_id', params.employeeId)
+      .gte('clock_in_at', thirtyAgo.toISOString())
+      .order('clock_in_at', { ascending: false }),
+    supabase
+      .from('time_logs')
+      .select('id, clock_in_at')
+      .eq('employee_id', params.employeeId)
+      .is('clock_out_at', null)
+      .maybeSingle(),
+  ])
 
   const allLogs  = logs ?? []
   const today    = isoDate(new Date())
@@ -89,19 +102,29 @@ export default async function EmployeeTimePage({ params }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link
-          href="/time/team"
-          className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-700"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Team Time
-        </Link>
-        <span className="text-neutral-300">/</span>
-        <div>
-          <h2 className="text-xl font-semibold text-neutral-900">{employee.full_name}</h2>
-          <p className="font-mono text-xs text-neutral-400">{employee.employee_code}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/time/team"
+            className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Team Time
+          </Link>
+          <span className="text-neutral-300">/</span>
+          <div>
+            <h2 className="text-xl font-semibold text-neutral-900">{employee.full_name}</h2>
+            <p className="font-mono text-xs text-neutral-400">{employee.employee_code}</p>
+          </div>
         </div>
+
+        {isAdmin && openSession && (
+          <ForceClockOutButton
+            employeeId={params.employeeId}
+            timeLogId={openSession.id}
+            clockInAt={openSession.clock_in_at}
+          />
+        )}
       </div>
 
       {/* Stats */}

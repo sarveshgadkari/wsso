@@ -1,11 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, ChevronRight, Dot } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Dot, LogOut } from 'lucide-react'
 import { DataTable, type TableColumn } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { formatDuration } from './TimeLogTable'
+import { ForceClockOutDialog } from './ForceClockOutDialog'
 
 export interface EmployeeTimeStats {
   id:             string
@@ -17,6 +19,13 @@ export interface EmployeeTimeStats {
   monthMinutes:   number
   autoLogouts:    number
   isActiveNow:    boolean
+  openSession:    { id: string; clock_in_at: string } | null
+}
+
+interface ForceTarget {
+  timeLogId:  string
+  clockInAt:  string
+  employeeId: string
 }
 
 interface Props {
@@ -24,8 +33,36 @@ interface Props {
   isAdmin:   boolean
 }
 
-export function TeamTimeTable({ employees }: Props) {
+export function TeamTimeTable({ employees, isAdmin }: Props) {
   const router = useRouter()
+  const [forceTarget, setForceTarget] = useState<ForceTarget | null>(null)
+
+  const forceCol: TableColumn<EmployeeTimeStats>[] = isAdmin
+    ? [
+        {
+          id: 'force',
+          header: '',
+          enableSorting: false,
+          cell: ({ row: { original: e } }) =>
+            e.openSession ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setForceTarget({
+                    timeLogId:  e.openSession!.id,
+                    clockInAt:  e.openSession!.clock_in_at,
+                    employeeId: e.id,
+                  })
+                }
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Force out
+              </Button>
+            ) : null,
+        },
+      ]
+    : []
 
   const columns: TableColumn<EmployeeTimeStats>[] = [
     {
@@ -124,14 +161,27 @@ export function TeamTimeTable({ employees }: Props) {
         </Button>
       ),
     },
+    ...forceCol,
   ]
 
   return (
-    <DataTable
-      data={employees}
-      columns={columns}
-      searchPlaceholder="Search employees…"
-      emptyMessage="No employees found."
-    />
+    <>
+      <DataTable
+        data={employees}
+        columns={columns}
+        searchPlaceholder="Search employees…"
+        emptyMessage="No employees found."
+      />
+
+      {forceTarget && (
+        <ForceClockOutDialog
+          open={!!forceTarget}
+          employeeId={forceTarget.employeeId}
+          timeLogId={forceTarget.timeLogId}
+          clockInAt={forceTarget.clockInAt}
+          onClose={() => setForceTarget(null)}
+        />
+      )}
+    </>
   )
 }

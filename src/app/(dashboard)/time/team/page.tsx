@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { TeamTimeTable, type EmployeeTimeStats } from '@/components/time/TeamTimeTable'
 
 export const metadata = { title: 'Team Time — WSSO' }
@@ -39,6 +40,9 @@ export default async function TeamTimePage() {
 
   const employeeIds = (employees ?? []).map((e) => e.id)
 
+  // Mechanism 2: close any stale open sessions (>16 h) before rendering
+  await closeStaleSessionsForEmployees(employeeIds)
+
   const { data: teams } = await supabase
     .from('teams')
     .select('id, name')
@@ -52,7 +56,7 @@ export default async function TeamTimePage() {
   const { data: logs } = employeeIds.length
     ? await supabase
         .from('time_logs')
-        .select('id, employee_id, log_date, duration_minutes, closed_reason, clock_out_at')
+        .select('id, employee_id, log_date, duration_minutes, closed_reason, clock_out_at, clock_in_at')
         .in('employee_id', employeeIds)
         .gte('log_date', monthStart)
     : { data: [] }
@@ -61,11 +65,15 @@ export default async function TeamTimePage() {
   const agg: Record<string, {
     today: number; week: number; month: number
     autoLogouts: number; isActiveNow: boolean
+    openSession: { id: string; clock_in_at: string } | null
   }> = {}
 
   ;(logs ?? []).forEach((l) => {
     if (!agg[l.employee_id]) {
-      agg[l.employee_id] = { today: 0, week: 0, month: 0, autoLogouts: 0, isActiveNow: false }
+      agg[l.employee_id] = {
+        today: 0, week: 0, month: 0,
+        autoLogouts: 0, isActiveNow: false, openSession: null,
+      }
     }
     const a = agg[l.employee_id]
     const mins = l.duration_minutes ?? 0
@@ -75,7 +83,10 @@ export default async function TeamTimePage() {
     a.month += mins
 
     if (l.closed_reason === 'auto_logout') a.autoLogouts++
-    if (!l.clock_out_at)                   a.isActiveNow = true
+    if (!l.clock_out_at) {
+      a.isActiveNow = true
+      a.openSession = { id: l.id, clock_in_at: l.clock_in_at }
+    }
   })
 
   const employeeStats: EmployeeTimeStats[] = (employees ?? []).map((e) => ({
@@ -88,6 +99,7 @@ export default async function TeamTimePage() {
     monthMinutes:  agg[e.id]?.month       ?? 0,
     autoLogouts:   agg[e.id]?.autoLogouts ?? 0,
     isActiveNow:   agg[e.id]?.isActiveNow ?? false,
+    openSession:   agg[e.id]?.openSession ?? null,
   }))
 
   return (

@@ -20,7 +20,7 @@ export default async function EmployeeDetailPage({ params }: Props) {
   // Regular RLS-scoped client — manager can only see employees on their team
   const supabase = await createClient()
 
-  const [profileRes, teamsRes, companiesRes, ecRes, managersRes] = await Promise.all([
+  const [profileRes, teamsRes, companiesRes, ecRes, managersRes, openSessionRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', params.id).single(),
     supabase.from('teams').select('id, name, code, manager_id').order('name'),
     supabase.from('companies').select('id, name, code').order('name'),
@@ -33,6 +33,12 @@ export default async function EmployeeDetailPage({ params }: Props) {
       .select('id, full_name, employee_code')
       .eq('role', 'manager')
       .order('full_name'),
+    supabase
+      .from('time_logs')
+      .select('id, clock_in_at')
+      .eq('employee_id', params.id)
+      .is('clock_out_at', null)
+      .maybeSingle(),
   ])
 
   // RLS returns null if the requesting user cannot see this profile
@@ -64,6 +70,7 @@ export default async function EmployeeDetailPage({ params }: Props) {
       companies={companies}
       managers={managers}
       isAdmin={viewer.role === 'admin'}
+      openSession={openSessionRes.data ?? null}
     />
   )
 }

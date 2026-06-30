@@ -26,17 +26,22 @@ function fmtDate(iso: string): string {
   })
 }
 
-function StatusBadge({ reason }: { reason: string | null }) {
+function StatusBadge({ reason, autoClosed }: { reason: string | null; autoClosed: boolean }) {
   if (reason === 'auto_logout') {
     return (
       <Badge variant="warning" className="gap-1 whitespace-nowrap">
         <AlertTriangle className="h-3 w-3" />
-        Auto clocked out
+        Auto-closed
       </Badge>
     )
   }
   if (reason === 'admin_correction') {
-    return (
+    return autoClosed ? (
+      <Badge variant="warning" className="gap-1 whitespace-nowrap">
+        <Shield className="h-3 w-3" />
+        Force closed
+      </Badge>
+    ) : (
       <Badge variant="info" className="gap-1 whitespace-nowrap">
         <Shield className="h-3 w-3" />
         Corrected
@@ -121,9 +126,14 @@ export function TimeLogTable({ logs, isAdmin }: Props) {
       },
     },
     {
-      accessorKey: 'closed_reason',
+      id: 'status',
       header: 'Status',
-      cell: ({ getValue }) => <StatusBadge reason={getValue<string | null>()} />,
+      cell: ({ row }) => (
+        <StatusBadge
+          reason={row.original.closed_reason}
+          autoClosed={row.original.auto_closed}
+        />
+      ),
     },
     ...adminCol,
   ]

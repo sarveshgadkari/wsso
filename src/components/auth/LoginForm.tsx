@@ -35,11 +35,11 @@ export function LoginForm() {
     })
 
     if (error) {
+      const isInvalidCredentials = error.message === 'Invalid login credentials'
       setError('root', {
-        message:
-          error.message === 'Invalid login credentials'
-            ? 'Incorrect email or password.'
-            : error.message,
+        message: isInvalidCredentials
+          ? 'Incorrect email or password. If you were just invited, open the set-password email first, then sign in.'
+          : error.message,
       })
       return
     }

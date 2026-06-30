@@ -37,6 +37,7 @@ interface Props {
 interface SuccessState {
   employee_code: string
   full_name:     string
+  email_sent:    boolean
 }
 
 export function CreateEmployeeDialog({
@@ -96,16 +97,24 @@ export function CreateEmployeeDialog({
     const body = await res.json()
 
     if (!res.ok) {
-      setError('root', { message: body.error ?? 'Failed to create employee' })
+      const msg = typeof body.error === 'string'
+        ? body.error
+        : 'Failed to create employee'
+      setError('root', { message: msg })
       return
     }
 
     setSuccess({
       employee_code: body.profile.employee_code,
       full_name:     body.profile.full_name,
+      email_sent:    body.email_sent === true,
     })
     onCreated(body.profile)
-    toast.success(`Employee ${body.profile.full_name} created`)
+    toast.success(
+      body.email_sent
+        ? `Employee ${body.profile.full_name} created — welcome email sent`
+        : `Employee ${body.profile.full_name} created — email could not be sent`,
+    )
   }
 
   return (
@@ -113,7 +122,7 @@ export function CreateEmployeeDialog({
       open={open}
       onClose={handleClose}
       title="Create employee"
-      description="A temporary set-password link will be logged to the console."
+      description="The employee will receive an email with a link to set their password and sign in."
       size="lg"
     >
       {success ? (
@@ -128,7 +137,9 @@ export function CreateEmployeeDialog({
             </p>
           </div>
           <p className="text-xs text-neutral-400">
-            The set-password link has been logged to the server console.
+            {success.email_sent
+              ? 'A set-password email was sent to the employee. They must use that link before signing in.'
+              : 'The account was created, but the welcome email could not be sent. Ask your admin to check email settings or resend the invite.'}
           </p>
         </div>
       ) : (

@@ -50,8 +50,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Employees', href: '/employees', icon: Users,     roles: ['admin', 'manager'] },
       { label: 'Companies', href: '/companies', icon: Building2, roles: ['admin'] },
-      { label: 'Projects',  href: '/projects',  icon: FolderOpen },
-      { label: 'Clients',   href: '/clients',   icon: Briefcase },
+      { label: 'Projects',  href: '/projects',  icon: FolderOpen, roles: ['admin', 'manager'] },
+      { label: 'Clients',   href: '/clients',   icon: Briefcase,  roles: ['admin', 'manager'] },
     ],
   },
   {
@@ -65,7 +65,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Content',
     items: [
       { label: 'Documents',    href: '/documents',    icon: FileText },
-      { label: 'Reports',      href: '/reports',      icon: BarChart3 },
+      { label: 'Reports',      href: '/reports',      icon: BarChart3,  roles: ['admin', 'manager'] },
       { label: 'Activity Log', href: '/activity-log', icon: Activity },
     ],
   },
@@ -95,7 +95,7 @@ export const DASHBOARD_PATHS = [
 ]
 
 /** Paths accessible only to admin/manager in the middleware */
-export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team']
+export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/projects', '/clients', '/reports']
 
 /** Paths accessible only to admin in the middleware */
 export const ADMIN_ONLY_PATHS = ['/companies', '/settings', '/api/admin']

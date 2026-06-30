@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, UserX, UserCheck, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, UserX, UserCheck, AlertTriangle, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -15,6 +15,7 @@ import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { updateEmployeeProfile, setEmployeeStatus } from '@/lib/actions/employees'
 import { updateEmployeeOrg } from '@/lib/actions/org'
 import { useToast } from '@/lib/store/toast'
+import { ForceClockOutDialog } from '@/components/time/ForceClockOutDialog'
 import type { Profile, Team, Company, UserRole } from '@/lib/types'
 
 export interface EmployeeDetailData extends Profile {
@@ -24,11 +25,12 @@ export interface EmployeeDetailData extends Profile {
 }
 
 interface Props {
-  employee:  EmployeeDetailData
-  teams:     (Pick<Team, 'id' | 'name' | 'code'> & { manager_id: string | null })[]
-  companies: Pick<Company, 'id' | 'name' | 'code'>[]
-  managers:  Pick<Profile, 'id' | 'full_name' | 'employee_code'>[]
-  isAdmin:   boolean
+  employee:    EmployeeDetailData
+  teams:       (Pick<Team, 'id' | 'name' | 'code'> & { manager_id: string | null })[]
+  companies:   Pick<Company, 'id' | 'name' | 'code'>[]
+  managers:    Pick<Profile, 'id' | 'full_name' | 'employee_code'>[]
+  isAdmin:     boolean
+  openSession: { id: string; clock_in_at: string } | null
 }
 
 const profileSchema = z.object({
@@ -46,13 +48,14 @@ const ROLE_VARIANT: Record<UserRole, 'danger' | 'purple' | 'info' | 'default'> =
   employee: 'default',
 }
 
-export function EmployeeDetail({ employee, teams, companies, managers, isAdmin }: Props) {
+export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, openSession }: Props) {
   const router = useRouter()
   const toast  = useToast()
 
   const [emp, setEmp] = useState<EmployeeDetailData>(employee)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [statusBusy,     setStatusBusy]     = useState(false)
+  const [forceOpen,      setForceOpen]      = useState(false)
 
   // Org form local state
   const [teamId,      setTeamId]      = useState(emp.team_id      ?? '')
@@ -155,15 +158,23 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin }
         </div>
 
         {isAdmin && (
-          <Button
-            variant={isActive ? 'destructive' : 'secondary'}
-            size="sm"
-            onClick={() => setDeactivateOpen(true)}
-          >
-            {isActive
-              ? <><UserX  className="h-3.5 w-3.5" /> Deactivate</>
-              : <><UserCheck className="h-3.5 w-3.5" /> Reactivate</>}
-          </Button>
+          <div className="flex items-center gap-2">
+            {openSession && (
+              <Button variant="secondary" size="sm" onClick={() => setForceOpen(true)}>
+                <LogOut className="h-3.5 w-3.5" />
+                Force clock out
+              </Button>
+            )}
+            <Button
+              variant={isActive ? 'destructive' : 'secondary'}
+              size="sm"
+              onClick={() => setDeactivateOpen(true)}
+            >
+              {isActive
+                ? <><UserX  className="h-3.5 w-3.5" /> Deactivate</>
+                : <><UserCheck className="h-3.5 w-3.5" /> Reactivate</>}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -324,6 +335,17 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin }
           </div>
         )}
       </div>
+
+      {/* Force clock out dialog */}
+      {isAdmin && openSession && (
+        <ForceClockOutDialog
+          open={forceOpen}
+          employeeId={emp.id}
+          timeLogId={openSession.id}
+          clockInAt={openSession.clock_in_at}
+          onClose={() => setForceOpen(false)}
+        />
+      )}
 
       {/* Deactivate / Reactivate confirmation dialog */}
       <Dialog

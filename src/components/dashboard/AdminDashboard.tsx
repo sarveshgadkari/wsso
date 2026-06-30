@@ -4,6 +4,7 @@ import {
   ListTodo, Loader, ChevronRight,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
@@ -29,6 +30,7 @@ export async function AdminDashboard() {
     overdueTacticsRes,
     completionLogsRes,
     hoursLogsRes,
+    activeEmployeeIdsRes,
   ] = await Promise.all([
     supabase.from('companies').select('*', { count: 'exact', head: true }),
     supabase.from('profiles')
@@ -62,7 +64,13 @@ export async function AdminDashboard() {
       .select('log_date, duration_minutes')
       .gte('log_date', isoDate(sevenAgo))
       .not('duration_minutes', 'is', null),
+    // Active employee IDs — used for Mechanism 2 stale session check
+    supabase.from('profiles').select('id').eq('status', 'active'),
   ])
+
+  // Mechanism 2: close any stale open sessions (>16 h) for all active employees
+  const activeEmployeeIds = (activeEmployeeIdsRes.data ?? []).map((e: { id: string }) => e.id)
+  await closeStaleSessionsForEmployees(activeEmployeeIds)
 
   const overdueTactics = (overdueTacticsRes.data ?? []) as unknown as OverdueTacticRow[]
   const overdueCount   = overdueTactics.length
