@@ -3,7 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 
-// Called by Vercel Cron (vercel.json) every 15 minutes.
+// Called by Vercel Cron (vercel.json) once daily at 00:00 UTC.
+// Vercel Hobby plan allows only daily cron jobs; Pro+ supports sub-daily schedules.
 // Finds any open time_log sessions older than 12 hours and closes them
 // with closed_reason = 'auto_logout'.  The _trg_calc_duration trigger
 // automatically computes duration_minutes from the timestamps.
