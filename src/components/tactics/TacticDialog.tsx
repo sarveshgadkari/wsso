@@ -117,7 +117,7 @@ export function TacticDialog({
         creator:  tactic?.creator ?? { id: currentUserId, full_name: '—', employee_code: '—' },
       }
 
-      toast.success(isEdit ? 'Tactic updated' : 'Tactic created')
+      toast.success(isEdit ? 'Work order updated' : 'Work order created')
       onSaved(row)
     } catch (err) {
       setError('root', { message: err instanceof Error ? err.message : 'Something went wrong' })
@@ -133,7 +133,7 @@ export function TacticDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Edit tactic' : 'New tactic'}
+      title={isEdit ? 'Edit work order' : 'New work order'}
       size="lg"
     >
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
@@ -145,7 +145,7 @@ export function TacticDialog({
 
         <Input
           label="Title *"
-          placeholder="Tactic title"
+          placeholder="Work order title"
           error={errors.title?.message}
           {...register('title')}
         />
@@ -215,7 +215,7 @@ export function TacticDialog({
             Cancel
           </Button>
           <Button type="submit" loading={isSubmitting}>
-            {isEdit ? 'Save changes' : 'Create tactic'}
+            {isEdit ? 'Save changes' : 'Create work order'}
           </Button>
         </DialogFooter>
       </form>

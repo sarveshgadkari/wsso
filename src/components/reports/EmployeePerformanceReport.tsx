@@ -117,7 +117,7 @@ export function EmployeePerformanceReport() {
       {!isPending && (
         <p className="mt-2 text-right text-xs text-neutral-400">
           Completed count and avg completion are for tasks marked done between {fmtDate(from)} and {fmtDate(to)}.
-          Overdue reflects current state. Assigned = all active (non-archived) tactics.
+          Overdue reflects current state. Assigned = all active (non-archived) work orders.
         </p>
       )}
     </div>

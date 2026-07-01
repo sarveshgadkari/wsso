@@ -41,7 +41,8 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Work',
     items: [
-      { label: 'Tactics',      href: '/tactics', icon: ClipboardList },
+      { label: 'TACTICs',      href: '/tactic-documents', icon: FileText },
+      { label: 'Work Orders',  href: '/tactics', icon: ClipboardList },
       { label: 'Kanban Board', href: '/kanban',  icon: Kanban },
     ],
   },

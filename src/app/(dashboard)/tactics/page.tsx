@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TacticsList } from '@/components/tactics/TacticsList'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 
-export const metadata = { title: 'Tactics — WSSO' }
+export const metadata = { title: 'Work Orders — WSSO' }
 
 export default async function TacticsPage() {
   const profile  = await requireProfile()
@@ -50,7 +50,7 @@ export default async function TacticsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold text-neutral-900">Tactics</h2>
+        <h2 className="text-xl font-semibold text-neutral-900">Work Orders</h2>
         <p className="mt-1 text-sm text-neutral-500">
           {isAdmin
             ? 'All work orders across the organisation. Codes are auto-generated (TAC001…).'

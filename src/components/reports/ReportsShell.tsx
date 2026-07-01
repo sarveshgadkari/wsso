@@ -17,8 +17,8 @@ const NAV: { key: ReportKey; icon: React.ComponentType<{ className?: string }>; 
   { key: 'daily',       icon: Calendar,       desc: 'Hours per employee for one day' },
   { key: 'weekly',      icon: CalendarDays,   desc: 'Daily breakdown across one week' },
   { key: 'performance', icon: Users,          desc: 'Completion rates, overdue, clock hours' },
-  { key: 'project',     icon: FolderKanban,   desc: 'Tactic progress & estimated vs actual hours' },
-  { key: 'workorders',  icon: ClipboardList,  desc: 'Filtered tactic list for print/export' },
+  { key: 'project',     icon: FolderKanban,   desc: 'Work order progress & estimated vs actual hours' },
+  { key: 'workorders',  icon: ClipboardList,  desc: 'Filtered work order list for print/export' },
 ]
 
 const REPORT_MAP: Record<ReportKey, React.ReactNode> = {

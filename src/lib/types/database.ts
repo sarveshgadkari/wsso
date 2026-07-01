@@ -491,6 +491,210 @@ export type Database = {
           },
         ]
       }
+
+      tactic_documents: {
+        Row: {
+          id: string
+          code: string
+          tactic_id: string | null          // optional link to a work order
+          date_of_meeting: string | null    // ISO date
+          time_of_meeting: string | null    // e.g. "6:00 PM IST"
+          facilitator: string | null
+          location: string | null
+          attendees: string | null          // comma-separated names
+          purpose: string
+          background_info: string | null
+          takeaways: string | null
+          status: 'draft' | 'submitted' | 'reviewed' | 'approved' | 'revision_needed'
+          reviewer_id: string | null
+          review_note: string | null
+          submitted_at: string | null
+          reviewed_at: string | null
+          company_id: string | null
+          project_id: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code?: string                     // auto-generated (TDOC001…)
+          tactic_id?: string | null
+          date_of_meeting?: string | null
+          time_of_meeting?: string | null
+          facilitator?: string | null
+          location?: string | null
+          attendees?: string | null
+          purpose: string
+          background_info?: string | null
+          takeaways?: string | null
+          status?: 'draft' | 'submitted' | 'reviewed' | 'approved' | 'revision_needed'
+          reviewer_id?: string | null
+          review_note?: string | null
+          submitted_at?: string | null
+          reviewed_at?: string | null
+          company_id?: string | null
+          project_id?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          tactic_id?: string | null
+          date_of_meeting?: string | null
+          time_of_meeting?: string | null
+          facilitator?: string | null
+          location?: string | null
+          attendees?: string | null
+          purpose?: string
+          background_info?: string | null
+          takeaways?: string | null
+          status?: 'draft' | 'submitted' | 'reviewed' | 'approved' | 'revision_needed'
+          reviewer_id?: string | null
+          review_note?: string | null
+          submitted_at?: string | null
+          reviewed_at?: string | null
+          company_id?: string | null
+          project_id?: string | null
+          created_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tactic_documents_tactic_id_fkey'
+            columns: ['tactic_id']
+            referencedRelation: 'tactics'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_documents_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_documents_reviewer_id_fkey'
+            columns: ['reviewer_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_documents_company_id_fkey'
+            columns: ['company_id']
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_documents_project_id_fkey'
+            columns: ['project_id']
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      tactic_tasks: {
+        Row: {
+          id: string
+          tactic_document_id: string
+          order_no: number
+          title: string
+          description: string
+          assigned_to: string | null        // profile UUID for internal employee
+          owner_name: string | null         // free-text for external owner
+          status: 'pending' | 'in_progress' | 'completed'
+          target_date: string | null        // ISO date
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tactic_document_id: string
+          order_no?: number
+          title: string
+          description?: string
+          assigned_to?: string | null
+          owner_name?: string | null
+          status?: 'pending' | 'in_progress' | 'completed'
+          target_date?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tactic_document_id?: string
+          order_no?: number
+          title?: string
+          description?: string
+          assigned_to?: string | null
+          owner_name?: string | null
+          status?: 'pending' | 'in_progress' | 'completed'
+          target_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tactic_tasks_tactic_document_id_fkey'
+            columns: ['tactic_document_id']
+            referencedRelation: 'tactic_documents'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_tasks_assigned_to_fkey'
+            columns: ['assigned_to']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      tactic_next_steps: {
+        Row: {
+          id: string
+          tactic_document_id: string
+          order_no: number
+          description: string
+          owner: string | null              // profile UUID
+          owner_name: string | null         // free-text for external owner
+          due_date: string | null           // ISO date
+          completed: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tactic_document_id: string
+          order_no?: number
+          description: string
+          owner?: string | null
+          owner_name?: string | null
+          due_date?: string | null
+          completed?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tactic_document_id?: string
+          order_no?: number
+          description?: string
+          owner?: string | null
+          owner_name?: string | null
+          due_date?: string | null
+          completed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tactic_next_steps_tactic_document_id_fkey'
+            columns: ['tactic_document_id']
+            referencedRelation: 'tactic_documents'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_next_steps_owner_fkey'
+            columns: ['owner']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
 
     Views: Record<string, never>

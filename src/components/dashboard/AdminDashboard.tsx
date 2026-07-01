@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   Building2, Users, FolderOpen, AlertCircle,
-  ListTodo, Loader, ChevronRight,
+  ListTodo, Loader, ChevronRight, FileText,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
@@ -31,6 +31,7 @@ export async function AdminDashboard() {
     completionLogsRes,
     hoursLogsRes,
     activeEmployeeIdsRes,
+    tacticDocsRes,
   ] = await Promise.all([
     supabase.from('companies').select('*', { count: 'exact', head: true }),
     supabase.from('profiles')
@@ -66,6 +67,11 @@ export async function AdminDashboard() {
       .not('duration_minutes', 'is', null),
     // Active employee IDs — used for Mechanism 2 stale session check
     supabase.from('profiles').select('id').eq('status', 'active'),
+    // TACTIC docs submitted by Managers that need Admin review
+    supabase
+      .from('tactic_documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'submitted'),
   ])
 
   // Mechanism 2: close any stale open sessions (>16 h) for all active employees
@@ -113,7 +119,7 @@ export async function AdminDashboard() {
   return (
     <div className="flex flex-col gap-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
         <StatCard label="Companies"       value={companiesRes.count   ?? 0} icon={Building2} />
         <StatCard label="Employees"       value={employeesRes.count   ?? 0} icon={Users} />
         <StatCard label="Active projects" value={projectsRes.count    ?? 0} icon={FolderOpen} />
@@ -125,6 +131,13 @@ export async function AdminDashboard() {
           sub="need attention"
           variant={overdueCount > 0 ? 'danger' : 'default'}
           icon={AlertCircle}
+        />
+        <StatCard
+          label="TACTICs pending"
+          value={tacticDocsRes.count ?? 0}
+          sub="awaiting review"
+          variant={(tacticDocsRes.count ?? 0) > 0 ? 'warning' : 'default'}
+          icon={FileText}
         />
       </div>
 

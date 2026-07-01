@@ -60,7 +60,7 @@ export function ActivityTimeline({ logs }: Props) {
                 <p className="text-sm text-neutral-800">
                   <span className="font-medium">{log.actor.full_name}</span>
                   {' '}
-                  <span className="text-neutral-600">{log.action}</span>
+                  <span className="text-neutral-600">{log.action.replace('Tactic created', 'Work order created').replace('Tactic updated', 'Work order updated')}</span>
                   {log.hours_logged != null && (
                     <span className="ml-1.5 inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
                       {log.hours_logged}h

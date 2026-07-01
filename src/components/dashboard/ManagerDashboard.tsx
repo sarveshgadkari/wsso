@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Users, ListTodo, Loader, AlertCircle, Clock, ChevronRight } from 'lucide-react'
+import { Users, ListTodo, Loader, AlertCircle, Clock, ChevronRight, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
@@ -38,6 +38,7 @@ export async function ManagerDashboard() {
     teamMembersRes,
     timeLogsRes,
     hoursLogsRes,
+    tacticDocsRes,
   ] = await Promise.all([
     supabase.from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -73,6 +74,11 @@ export async function ManagerDashboard() {
       .select('log_date, duration_minutes')
       .gte('log_date', isoDate(sevenAgo))
       .not('duration_minutes', 'is', null),
+    // TACTIC docs submitted by team employees awaiting Manager review
+    supabase
+      .from('tactic_documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'submitted'),
   ])
 
   // Open tactics per team member
@@ -130,7 +136,7 @@ export async function ManagerDashboard() {
   return (
     <div className="flex flex-col gap-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard label="Team size"   value={teamRes.count        ?? 0} icon={Users} />
         <StatCard label="Open"        value={openRes.count        ?? 0} sub="assigned"   icon={ListTodo} />
         <StatCard label="In Progress" value={inProgressRes.count  ?? 0}                  icon={Loader} />
@@ -140,6 +146,13 @@ export async function ManagerDashboard() {
           sub="need attention"
           variant={(overdueRes.count ?? 0) > 0 ? 'danger' : 'default'}
           icon={AlertCircle}
+        />
+        <StatCard
+          label="TACTICs pending"
+          value={tacticDocsRes.count ?? 0}
+          sub="awaiting your review"
+          variant={(tacticDocsRes.count ?? 0) > 0 ? 'warning' : 'default'}
+          icon={FileText}
         />
       </div>
 

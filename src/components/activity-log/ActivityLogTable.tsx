@@ -115,7 +115,7 @@ export function ActivityLogTable({ logs: allLogs }: Props) {
       <div className="relative w-56">
         <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-neutral-400" />
         <input
-          placeholder="Filter tactic (TAC-015)…"
+          placeholder="Filter by code (TAC-015)…"
           value={tacticSearch}
           onChange={(e) => setTacticSearch(e.target.value)}
           className="h-9 w-full rounded border border-neutral-300 bg-white pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"

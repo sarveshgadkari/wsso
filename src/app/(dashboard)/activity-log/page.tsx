@@ -82,7 +82,7 @@ export default async function ActivityLogPage({ searchParams }: PageProps) {
       <div>
         <h2 className="text-xl font-semibold text-neutral-900">Activity Log</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Tactic and system audit trail {scopeLabel}.
+          Work order and system audit trail {scopeLabel}.
         </p>
       </div>
 

@@ -122,7 +122,7 @@ export function TacticsList({
         {canCreate && (
           <Button size="sm" className="ml-auto" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
-            New tactic
+            New Work Order
           </Button>
         )}
       </div>
@@ -144,7 +144,7 @@ export function TacticsList({
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-sm text-neutral-400">
-                    No tactics match the current filters.
+                    No work orders match the current filters.
                   </td>
                 </tr>
               ) : (

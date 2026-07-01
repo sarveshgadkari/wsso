@@ -5,8 +5,8 @@ import type { UserRole } from '@/lib/types'
 
 const ACTION_OPTIONS = [
   { value: '',        label: 'All actions' },
-  { value: 'created', label: 'Tactic created' },
-  { value: 'updated', label: 'Tactic updated' },
+  { value: 'created', label: 'Work order created' },
+  { value: 'updated', label: 'Work order updated' },
   { value: 'status',  label: 'Status changed' },
   { value: 'hours',   label: 'Hours logged' },
   { value: 'system',  label: 'System events' },

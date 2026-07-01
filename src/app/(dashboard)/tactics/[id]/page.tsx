@@ -10,7 +10,7 @@ interface Props {
 }
 
 export async function generateMetadata() {
-  return { title: `Tactic — WSSO` }
+  return { title: `Work Order — WSSO` }
 }
 
 export default async function TacticDetailPage({ params }: Props) {

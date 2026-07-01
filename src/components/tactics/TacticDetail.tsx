@@ -60,7 +60,7 @@ export function TacticDetail({
         <div className="flex items-start gap-3">
           <Link href="/tactics" className="mt-1 flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-700">
             <ArrowLeft className="h-4 w-4" />
-            Tactics
+            Work Orders
           </Link>
           <span className="mt-1 text-neutral-300">/</span>
           <div>
@@ -104,7 +104,7 @@ export function TacticDetail({
           onTransitioned={newStatus => setTactic(prev => ({ ...prev, status: newStatus }))}
         />
         {status === 'archived' && (
-          <p className="text-sm text-neutral-400">This tactic has been archived.</p>
+          <p className="text-sm text-neutral-400">This work order has been archived.</p>
         )}
         {getAllowedNextLength(status, role) === 0 && status !== 'archived' && (
           <p className="text-sm text-neutral-400">No actions available for your role on this status.</p>
