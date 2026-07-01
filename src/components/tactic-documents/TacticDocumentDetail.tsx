@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Pencil, CheckCircle2, RotateCcw,
-  AlertTriangle, Clock, User, Briefcase, Calendar,
+  AlertTriangle, User, Calendar,
   MapPin, Users, FileText,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -95,7 +95,7 @@ const TASK_STATUS_LABEL: Record<string, string> = {
 
 const TASK_STATUS_VARIANT: Record<string, string> = {
   pending:     'default',
-  in_progress: 'primary',
+  in_progress: 'info',
   completed:   'success',
 }
 

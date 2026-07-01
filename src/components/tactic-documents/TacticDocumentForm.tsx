@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { createTacticDocument, updateTacticDocument } from '@/lib/actions/tactic-documents'
 import type { TacticDocumentInput, TaskInput, NextStepInput } from '@/lib/actions/tactic-documents'
 
@@ -32,7 +31,7 @@ function uuid() {
   return Math.random().toString(36).slice(2)
 }
 
-function emptyTask(order: number): TaskDraft {
+function emptyTask(): TaskDraft {
   return {
     _key: uuid(),
     title: '',
@@ -137,7 +136,7 @@ export function TacticDocumentForm({
   const [takeaways,     setTakeaways]     = useState(initialDoc?.takeaways ?? '')
   const [companyId,     setCompanyId]     = useState(initialDoc?.company_id ?? '')
   const [projectId,     setProjectId]     = useState(initialDoc?.project_id ?? '')
-  const [tacticId,      setTacticId]      = useState(initialDoc?.tactic_id ?? '')
+  const [tacticId]      = useState(initialDoc?.tactic_id ?? '')
 
   // Dynamic lists
   const [tasks, setTasks] = useState<TaskDraft[]>(
@@ -151,7 +150,7 @@ export function TacticDocumentForm({
           owner_name:  t.owner_name  ?? '',
           target_date: t.target_date ?? '',
         }))
-      : [emptyTask(1)],
+      : [emptyTask()],
   )
 
   const [nextSteps, setNextSteps] = useState<NextStepDraft[]>(
@@ -347,7 +346,7 @@ export function TacticDocumentForm({
             size="sm"
             variant="secondary"
             type="button"
-            onClick={() => setTasks(prev => [...prev, emptyTask(prev.length + 1)])}
+            onClick={() => setTasks(prev => [...prev, emptyTask()])}
           >
             <Plus className="h-3.5 w-3.5" />
             Add Task
@@ -355,7 +354,7 @@ export function TacticDocumentForm({
         </div>
 
         {tasks.length === 0 && (
-          <p className="text-sm text-neutral-400">No tasks yet. Click "Add Task" to begin.</p>
+          <p className="text-sm text-neutral-400">No tasks yet. Click &quot;Add Task&quot; to begin.</p>
         )}
 
         <div className="flex flex-col gap-4">

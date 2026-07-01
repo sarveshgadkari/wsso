@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/Badge'
-import { cn } from '@/lib/utils'
 
 export type TacticDocStatus = 'draft' | 'submitted' | 'reviewed' | 'approved' | 'revision_needed'
 
