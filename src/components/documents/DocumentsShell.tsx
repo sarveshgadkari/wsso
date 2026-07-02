@@ -181,9 +181,15 @@ export function DocumentsShell({
   const [downloading, setDownloading] = useState<string | null>(null)
   const [deleting,    setDeleting]    = useState<string | null>(null)
   const [isPending,   start]          = useTransition()
+  const skipInitialFetch                = useRef(true)
 
-  // Re-fetch when filters change (debounced for search)
+  // Re-fetch when filters change (skip mount — server already sent initialDocs)
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false
+      return
+    }
+
     const t = setTimeout(() => {
       start(async () => {
         try {
@@ -194,6 +200,7 @@ export function DocumentsShell({
         }
       })
     }, search ? 300 : 0)
+
     return () => clearTimeout(t)
   }, [search, entityType, toast])
 

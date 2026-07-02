@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useMemo } from 'react'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -32,9 +33,12 @@ export const useToastStore = create<ToastStore>((set) => ({
 /** Convenience hook — call inside any Client Component */
 export function useToast() {
   const add = useToastStore((s) => s.add)
-  return {
-    success: (msg: string) => add('success', msg),
-    error:   (msg: string) => add('error',   msg),
-    info:    (msg: string) => add('info',    msg),
-  }
+  return useMemo(
+    () => ({
+      success: (msg: string) => add('success', msg),
+      error:   (msg: string) => add('error', msg),
+      info:    (msg: string) => add('info', msg),
+    }),
+    [add],
+  )
 }
