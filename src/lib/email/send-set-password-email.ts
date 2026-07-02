@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { appBaseUrl } from '@/lib/auth/set-password-link'
 
 const DEFAULT_FROM = 'onboarding@resend.dev'
 
@@ -18,8 +19,7 @@ export interface SetPasswordEmailResult {
 }
 
 function appRedirectUrl(): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.vercel.app'
-  return `${appUrl}/auth/callback?next=/reset-password`
+  return `${appBaseUrl()}/auth/callback?next=/reset-password`
 }
 
 function welcomeHtml(params: SetPasswordEmailParams, link: string): string {

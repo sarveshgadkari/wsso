@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { sendSetPasswordEmail } from '@/lib/email/send-set-password-email'
+import { buildSetPasswordCallbackUrl } from '@/lib/auth/set-password-link'
 import { TIMEZONE_VALUES, DEFAULT_TIMEZONE } from '@/lib/utils/timezones'
 
 const createUserSchema = z.object({
@@ -128,7 +129,9 @@ export async function POST(request: NextRequest) {
     console.error('[createUser] generateLink failed:', linkError.message)
   }
 
-  const setPasswordLink = linkData?.properties?.action_link ?? null
+  const setPasswordLink = linkData?.properties?.hashed_token
+    ? buildSetPasswordCallbackUrl(linkData.properties.hashed_token)
+    : linkData?.properties?.action_link ?? null
 
   // ── 7. Email the employee a set-password link ───────────────────────────────
   const emailResult = await sendSetPasswordEmail({
