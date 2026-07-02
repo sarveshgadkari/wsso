@@ -4,8 +4,9 @@ import { ArrowLeft } from 'lucide-react'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
-import { TimeLogTable, formatDuration } from '@/components/time/TimeLogTable'
+import { TimeLogTable } from '@/components/time/TimeLogTable'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
+import { formatDuration } from '@/lib/utils/time-format'
 import { ForceClockOutButton } from '@/components/time/ForceClockOutButton'
 import {
   todayInTimezone,

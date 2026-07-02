@@ -14,12 +14,16 @@ export function isoDate(d: Date = new Date()): string {
 
 /** Local calendar date in an IANA timezone (en-CA → YYYY-MM-DD). */
 export function todayInTimezone(timeZone: string, d: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year:  'numeric',
-    month: '2-digit',
-    day:   '2-digit',
-  }).format(d)
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year:  'numeric',
+      month: '2-digit',
+      day:   '2-digit',
+    }).format(d)
+  } catch {
+    return isoDate(d)
+  }
 }
 
 function weekdayInTimezone(timeZone: string, d: Date = new Date()): number {

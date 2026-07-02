@@ -37,8 +37,13 @@ function Sparkline({ days, dates }: { days: Record<string, number>; dates: strin
   )
 }
 
-export function WeeklyTimeReport() {
-  const thisMonday = toMonday(isoToday())
+interface Props {
+  viewerTimezone: string
+}
+
+export function WeeklyTimeReport({ viewerTimezone }: Props) {
+  const thisMonday = toMonday(isoToday(viewerTimezone))
+  const maxDate    = isoToday(viewerTimezone)
   const [weekInput, setWeekInput] = useState(thisMonday)
   const [rows,      setRows]      = useState<WeeklyTimeRow[]>([])
   const [dates,     setDates]     = useState<string[]>([])
@@ -91,7 +96,7 @@ export function WeeklyTimeReport() {
           <input
             type="date"
             value={weekInput}
-            max={isoToday()}
+            max={maxDate}
             onChange={e => setWeekInput(e.target.value)}
             className="h-9 rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />

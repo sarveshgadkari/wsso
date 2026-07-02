@@ -6,7 +6,7 @@ import { AlertTriangle, ChevronRight, Dot, LogOut } from 'lucide-react'
 import { DataTable, type TableColumn } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { formatDuration } from './TimeLogTable'
+import { formatDuration } from '@/lib/utils/time-format'
 import { ForceClockOutDialog } from './ForceClockOutDialog'
 
 export interface EmployeeTimeStats {

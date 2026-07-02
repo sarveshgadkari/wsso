@@ -6,13 +6,10 @@ import { DataTable, type TableColumn } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { TimeLogEditDialog } from './TimeLogEditDialog'
+import { formatDuration } from '@/lib/utils/time-format'
 import type { TimeLog } from '@/lib/types'
 
-export function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
+export { formatDuration } from '@/lib/utils/time-format'
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

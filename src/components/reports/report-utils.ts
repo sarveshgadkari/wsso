@@ -1,5 +1,14 @@
 // Client-safe utilities — no 'use server', importable by client components
 
+import { todayInTimezone } from '@/lib/utils/dates'
+import { TIMEZONE_OPTIONS } from '@/lib/utils/timezones'
+
+export function timezoneShortLabel(timeZone: string): string {
+  const opt = TIMEZONE_OPTIONS.find((o) => o.value === timeZone)
+  if (!opt) return timeZone
+  return opt.label.split(' — ')[0] ?? timeZone
+}
+
 export function downloadCSV(
   filename: string,
   headers:  string[],
@@ -49,13 +58,15 @@ export function addDays(dateStr: string, n: number): string {
   return d.toISOString().split('T')[0]
 }
 
-export function isoToday(): string {
+export function isoToday(timeZone?: string): string {
+  if (timeZone) return todayInTimezone(timeZone)
   return new Date().toISOString().split('T')[0]
 }
 
-export function isoDaysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
+export function isoDaysAgo(n: number, timeZone?: string): string {
+  const today = isoToday(timeZone)
+  const d     = new Date(`${today}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - n)
   return d.toISOString().split('T')[0]
 }
 

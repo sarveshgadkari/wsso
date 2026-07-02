@@ -7,9 +7,14 @@ import { getEmployeePerformanceReport } from '@/lib/actions/reports'
 import { downloadCSV, isoToday, isoDaysAgo, fmtDate } from './report-utils'
 import type { PerformanceRow } from './report-types'
 
-export function EmployeePerformanceReport() {
-  const [from, setFrom]     = useState(() => isoDaysAgo(30))
-  const [to,   setTo]       = useState(isoToday)
+interface Props {
+  viewerTimezone: string
+}
+
+export function EmployeePerformanceReport({ viewerTimezone }: Props) {
+  const [from, setFrom]     = useState(() => isoDaysAgo(30, viewerTimezone))
+  const [to,   setTo]       = useState(() => isoToday(viewerTimezone))
+  const maxDate             = isoToday(viewerTimezone)
   const [rows, setRows]     = useState<PerformanceRow[]>([])
   const [isPending, start]  = useTransition()
 
@@ -52,7 +57,7 @@ export function EmployeePerformanceReport() {
             type="date"
             value={to}
             min={from}
-            max={isoToday()}
+            max={maxDate}
             onChange={e => setTo(e.target.value)}
             className="h-9 rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />

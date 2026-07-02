@@ -1,7 +1,9 @@
 'use server'
 
-import { requireRole } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/auth/session'
+import { todayInTimezone } from '@/lib/utils/dates'
+import { resolveTimezone } from '@/lib/utils/timezones'
 import type {
   DailyTimeRow, WeeklyTimeRow, PerformanceRow,
   ProjectProgressRow, WorkOrderRow,
@@ -22,8 +24,9 @@ function addDays(dateStr: string, n: number): string {
   return d.toISOString().split('T')[0]
 }
 
-function isoToday(): string {
-  return new Date().toISOString().split('T')[0]
+async function viewerToday(): Promise<string> {
+  const profile = await requireRole(['admin', 'manager'])
+  return todayInTimezone(resolveTimezone(profile.timezone))
 }
 
 // ── Raw Supabase row shapes ────────────────────────────────────────────────────
@@ -165,7 +168,7 @@ export async function getEmployeePerformanceReport(
 ): Promise<PerformanceRow[]> {
   await requireRole(['admin', 'manager'])
   const supabase = await createClient()
-  const today    = isoToday()
+  const today    = await viewerToday()
   const toEnd    = `${to}T23:59:59.999Z`
 
   const [profilesRes, assignedRes, completedRes, overdueRes, hoursRes] = await Promise.all([
@@ -316,7 +319,7 @@ export async function getWorkOrdersReport(params: {
 }): Promise<WorkOrderRow[]> {
   await requireRole(['admin', 'manager'])
   const supabase = await createClient()
-  const today    = isoToday()
+  const today    = await viewerToday()
 
   let q = supabase.from('tactics').select(`
     id, code, title, status, priority, due_date, estimated_hours, created_at,

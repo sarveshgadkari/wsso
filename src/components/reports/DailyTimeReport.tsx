@@ -7,8 +7,12 @@ import { getDailyTimeReport } from '@/lib/actions/reports'
 import { downloadCSV, fmtHours, fmtDecimalHours, isoToday, fmtDate } from './report-utils'
 import type { DailyTimeRow } from './report-types'
 
-export function DailyTimeReport() {
-  const [date, setDate]       = useState(isoToday)
+interface Props {
+  viewerTimezone: string
+}
+
+export function DailyTimeReport({ viewerTimezone }: Props) {
+  const [date, setDate]       = useState(() => isoToday(viewerTimezone))
   const [rows, setRows]       = useState<DailyTimeRow[]>([])
   const [isPending, start]    = useTransition()
 
@@ -20,6 +24,7 @@ export function DailyTimeReport() {
   }, [date])
 
   const total = rows.reduce((s, r) => s + r.minutes, 0)
+  const maxDate = isoToday(viewerTimezone)
 
   function exportCSV() {
     downloadCSV(
@@ -38,7 +43,7 @@ export function DailyTimeReport() {
           <input
             type="date"
             value={date}
-            max={isoToday()}
+            max={maxDate}
             onChange={e => setDate(e.target.value)}
             className="h-9 rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
@@ -98,6 +103,7 @@ export function DailyTimeReport() {
       {!isPending && (
         <p className="mt-2 text-right text-xs text-neutral-400">
           {rows.filter(r => r.minutes > 0).length} of {rows.length} employees logged time
+          on their local {fmtDate(date)}.
         </p>
       )}
     </div>

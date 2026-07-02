@@ -12,6 +12,7 @@ import { ProjectProgressReport }     from './ProjectProgressReport'
 import { WorkOrdersReport }          from './WorkOrdersReport'
 import type { ReportKey } from './report-types'
 import { REPORT_LABELS }  from './report-types'
+import { timezoneShortLabel } from './report-utils'
 
 const NAV: { key: ReportKey; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
   { key: 'daily',       icon: Calendar,       desc: 'Hours per employee for one day' },
@@ -21,24 +22,27 @@ const NAV: { key: ReportKey; icon: React.ComponentType<{ className?: string }>; 
   { key: 'workorders',  icon: ClipboardList,  desc: 'Filtered work order list for print/export' },
 ]
 
-const REPORT_MAP: Record<ReportKey, React.ReactNode> = {
-  daily:       <DailyTimeReport />,
-  weekly:      <WeeklyTimeReport />,
-  performance: <EmployeePerformanceReport />,
-  project:     <ProjectProgressReport />,
-  workorders:  <WorkOrdersReport />,
-}
-
 interface Props {
-  role: string
+  role:             string
+  viewerTimezone:   string
 }
 
-export function ReportsShell({ role }: Props) {
+function renderReport(key: ReportKey, viewerTimezone: string) {
+  switch (key) {
+    case 'daily':       return <DailyTimeReport viewerTimezone={viewerTimezone} />
+    case 'weekly':      return <WeeklyTimeReport viewerTimezone={viewerTimezone} />
+    case 'performance': return <EmployeePerformanceReport viewerTimezone={viewerTimezone} />
+    case 'project':     return <ProjectProgressReport />
+    case 'workorders':  return <WorkOrdersReport viewerTimezone={viewerTimezone} />
+  }
+}
+
+export function ReportsShell({ role, viewerTimezone }: Props) {
   const [active, setActive] = useState<ReportKey>('daily')
+  const tzLabel = timezoneShortLabel(viewerTimezone)
 
   return (
     <div className="flex gap-5 print:block">
-      {/* Left picker — hidden when printing */}
       <aside className="w-56 shrink-0 print:hidden">
         <nav className="flex flex-col gap-1">
           {NAV.map(item => {
@@ -72,16 +76,18 @@ export function ReportsShell({ role }: Props) {
             Showing data scoped to your team.
           </p>
         )}
+
+        <p className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+          Date filters default to {tzLabel}. Employee hours use each person&apos;s local work day.
+        </p>
       </aside>
 
-      {/* Report content */}
       <div className="min-w-0 flex-1">
-        {/* Print-only header */}
         <div className="hidden print:block print:mb-4">
           <h2 className="text-base font-semibold">{REPORT_LABELS[active]}</h2>
         </div>
 
-        {REPORT_MAP[active]}
+        {renderReport(active, viewerTimezone)}
       </div>
     </div>
   )

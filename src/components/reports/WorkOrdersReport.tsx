@@ -26,11 +26,16 @@ const FILTER_OPTIONS = [
 
 interface ProjectOption { id: string; name: string; code: string }
 
-export function WorkOrdersReport() {
+interface Props {
+  viewerTimezone: string
+}
+
+export function WorkOrdersReport({ viewerTimezone }: Props) {
   const [status,    setStatus]    = useState('open')
   const [projectId, setProjectId] = useState('')
-  const [from,      setFrom]      = useState(() => isoDaysAgo(30))
-  const [to,        setTo]        = useState(isoToday)
+  const [from,      setFrom]      = useState(() => isoDaysAgo(30, viewerTimezone))
+  const [to,        setTo]        = useState(() => isoToday(viewerTimezone))
+  const maxDate                   = isoToday(viewerTimezone)
   const [rows,      setRows]      = useState<WorkOrderRow[]>([])
   const [projects,  setProjects]  = useState<ProjectOption[]>([])
   const [isPending, start]        = useTransition()
@@ -77,7 +82,7 @@ export function WorkOrdersReport() {
     )
   }
 
-  const today = isoToday()
+  const today = maxDate
 
   function dueCls(row: WorkOrderRow): string {
     if (!row.due_date || row.status === 'done' || row.status === 'archived') return 'text-neutral-500'
@@ -135,7 +140,7 @@ export function WorkOrdersReport() {
             type="date"
             value={to}
             min={from}
-            max={isoToday()}
+            max={maxDate}
             onChange={e => setTo(e.target.value)}
             className="h-9 rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />

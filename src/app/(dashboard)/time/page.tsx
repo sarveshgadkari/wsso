@@ -2,7 +2,7 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { TimeLogTable } from '@/components/time/TimeLogTable'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
-import { formatDuration } from '@/components/time/TimeLogTable'
+import { formatDuration } from '@/lib/utils/time-format'
 import {
   todayInTimezone,
   startOfWeekInTimezone,
