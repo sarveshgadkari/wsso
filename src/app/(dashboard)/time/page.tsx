@@ -9,7 +9,23 @@ import {
   last7Days,
   dayLabel,
 } from '@/lib/utils/dates'
-import { resolveTimezone } from '@/lib/utils/timezones'
+import { resolveTimezone, timezoneShortLabel, timezoneDisplayLabel, formatTimeInTimezone } from '@/lib/utils/timezones'
+import { Globe } from 'lucide-react'
+
+function liveMinutes(l: {
+  duration_minutes: number | null
+  clock_out_at: string | null
+  clock_in_at: string
+}): number {
+  if (l.duration_minutes != null) return l.duration_minutes
+  if (!l.clock_out_at) {
+    return Math.max(
+      0,
+      Math.floor((Date.now() - new Date(l.clock_in_at).getTime()) / 60_000),
+    )
+  }
+  return 0
+}
 
 export const metadata = { title: 'My Time — WSSO' }
 
@@ -34,17 +50,17 @@ export default async function MyTimePage() {
   const weekStart = startOfWeekInTimezone(tz)
 
   const todayMinutes = allLogs
-    .filter((l) => l.log_date === today && l.duration_minutes != null)
-    .reduce((s, l) => s + (l.duration_minutes ?? 0), 0)
+    .filter((l) => l.log_date === today)
+    .reduce((s, l) => s + liveMinutes(l), 0)
 
   const weekMinutes = allLogs
-    .filter((l) => l.log_date && l.log_date >= weekStart && l.duration_minutes != null)
-    .reduce((s, l) => s + (l.duration_minutes ?? 0), 0)
+    .filter((l) => l.log_date && l.log_date >= weekStart)
+    .reduce((s, l) => s + liveMinutes(l), 0)
 
   const minutesByDate: Record<string, number> = {}
   allLogs.forEach((l) => {
-    if (l.log_date && l.duration_minutes) {
-      minutesByDate[l.log_date] = (minutesByDate[l.log_date] ?? 0) + l.duration_minutes
+    if (l.log_date) {
+      minutesByDate[l.log_date] = (minutesByDate[l.log_date] ?? 0) + liveMinutes(l)
     }
   })
 
@@ -55,16 +71,37 @@ export default async function MyTimePage() {
   }))
 
   const isAdmin = profile.role === 'admin'
+  const tzShort = timezoneShortLabel(tz)
+  const localTime = formatTimeInTimezone(tz)
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold text-neutral-900">My Time</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Your personal clock-in history and weekly overview
-          ({TIMEZONE_LABEL(tz)}).
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-neutral-900">My Time</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Your personal clock-in history and weekly overview.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-50">
+            <Globe className="h-4 w-4 text-primary-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Your timezone</p>
+            <p className="text-sm font-semibold text-neutral-900">
+              {tzShort}
+              <span className="ml-1.5 font-normal text-neutral-500">· {localTime} now</span>
+            </p>
+            <p className="truncate text-xs text-neutral-400">{timezoneDisplayLabel(tz)}</p>
+          </div>
+        </div>
       </div>
+
+      <p className="-mt-3 text-xs text-neutral-400">
+        Today, this week, and session clock times use your assigned timezone ({tzShort}).
+      </p>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
         <div className="card p-5">
@@ -85,14 +122,8 @@ export default async function MyTimePage() {
 
       <div>
         <h3 className="mb-3 text-sm font-semibold text-neutral-700">Recent sessions</h3>
-        <TimeLogTable logs={allLogs} isAdmin={isAdmin} />
+        <TimeLogTable logs={allLogs} isAdmin={isAdmin} timeZone={tz} />
       </div>
     </div>
   )
-}
-
-function TIMEZONE_LABEL(tz: string): string {
-  if (tz === 'Asia/Kolkata') return 'IST'
-  if (tz === 'America/Chicago') return 'CST'
-  return tz
 }

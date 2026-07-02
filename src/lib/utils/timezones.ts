@@ -20,3 +20,32 @@ export function resolveTimezone(tz: string | null | undefined): string {
   if (tz && isValidTimezone(tz)) return tz
   return DEFAULT_TIMEZONE
 }
+
+/** e.g. "IST", "CST", "EST" */
+export function timezoneShortLabel(timeZone: string): string {
+  const opt = TIMEZONE_OPTIONS.find((o) => o.value === timeZone)
+  if (!opt) return timeZone
+  return opt.label.split(' — ')[0] ?? timeZone
+}
+
+/** e.g. "IST — India (Asia/Kolkata)" */
+export function timezoneDisplayLabel(timeZone: string): string {
+  const opt = TIMEZONE_OPTIONS.find((o) => o.value === timeZone)
+  return opt?.label ?? timeZone
+}
+
+/** Current clock time in the employee's timezone — e.g. "3:45 PM" */
+export function formatTimeInTimezone(timeZone: string, date: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour:         'numeric',
+      minute:       '2-digit',
+      hour12:       true,
+    }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    }).format(date)
+  }
+}

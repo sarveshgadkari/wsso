@@ -4,6 +4,7 @@ export interface DailyTimeRow {
   id:            string
   full_name:     string
   employee_code: string
+  timezone:      string
   minutes:       number
 }
 
@@ -11,6 +12,7 @@ export interface WeeklyTimeRow {
   id:            string
   full_name:     string
   employee_code: string
+  timezone:      string
   days:          Record<string, number>  // YYYY-MM-DD → minutes
   total:         number
 }
@@ -19,6 +21,7 @@ export interface PerformanceRow {
   id:                  string
   full_name:           string
   employee_code:       string
+  timezone:            string
   assigned:            number
   completed:           number
   overdue:             number

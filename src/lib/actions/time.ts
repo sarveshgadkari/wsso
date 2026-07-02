@@ -7,6 +7,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth/session'
 import { endOfDayISO, todayInTimezone } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/types'
+
+type DbClient = SupabaseClient<Database>
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -19,10 +23,49 @@ async function employeeTimezone(employeeId: string): Promise<string> {
   return resolveTimezone(data?.timezone)
 }
 
+async function closeStaleOpenSession(
+  employeeId: string,
+  tz: string,
+  supabase: DbClient,
+): Promise<void> {
+  const today = todayInTimezone(tz)
+
+  const { data: openSession } = await supabase
+    .from('time_logs')
+    .select('id, log_date')
+    .eq('employee_id', employeeId)
+    .is('clock_out_at', null)
+    .maybeSingle()
+
+  if (!openSession || openSession.log_date === today) return
+
+  await supabaseAdmin
+    .from('time_logs')
+    .update({
+      clock_out_at:  endOfDayISO(openSession.log_date, tz),
+      closed_reason: 'auto_logout',
+      auto_closed:   true,
+    })
+    .eq('id', openSession.id)
+}
+
+async function getTodayLog(employeeId: string, tz: string, supabase: DbClient) {
+  const today = todayInTimezone(tz)
+  return supabase
+    .from('time_logs')
+    .select('*')
+    .eq('employee_id', employeeId)
+    .eq('log_date', today)
+    .maybeSingle()
+}
+
+function revalidateTimePaths() {
+  revalidatePath('/dashboard')
+  revalidatePath('/time')
+  revalidatePath('/time/team')
+}
+
 // ── Mechanism 2: close stale open sessions for a set of employees ─────────────
-// Called from server-component page data-fetching before rendering.
-// Closes any session with clock_out_at IS NULL and clock_in_at > 16 h ago.
-// Returns the number of sessions that were closed.
 
 export async function closeStaleSessionsForEmployees(
   employeeIds: string[],
@@ -58,57 +101,85 @@ export async function closeStaleSessionsForEmployees(
   return stale.length
 }
 
-// ── Clock In ──────────────────────────────────────────────────────────────────
-// Mechanism 1: before creating a new session, auto-close any open session from
-// a PREVIOUS day (stale).  If an open session exists from TODAY, block the
-// clock-in (user must clock out manually).
+// ── Login clock-in (once per local day) ───────────────────────────────────────
+// First app sign-in of the employee's local day creates today's time log.
+// clock_in_at = login timestamp; employee still must clock out manually.
 
-export async function clockIn() {
-  const profile = await requireProfile()
+export async function recordLoginClockIn(): Promise<{ ok: boolean; error?: string }> {
+  const profile  = await requireProfile()
+  if (profile.role !== 'employee') return { ok: true }
+
+  const tz       = resolveTimezone(profile.timezone)
   const supabase = await createClient()
 
-  const tz    = resolveTimezone(profile.timezone)
-  const today = todayInTimezone(tz)
+  const { data: todayLog } = await getTodayLog(profile.id, tz, supabase)
+  if (todayLog) return { ok: true }
 
-  const { data: existingSession } = await supabase
+  await closeStaleOpenSession(profile.id, tz, supabase)
+
+  const { error } = await supabase
     .from('time_logs')
-    .select('id, log_date')
-    .eq('employee_id', profile.id)
-    .is('clock_out_at', null)
-    .maybeSingle()
+    .insert({
+      employee_id:     profile.id,
+      clock_in_source: 'login',
+    })
 
-  if (existingSession) {
-    if (existingSession.log_date === today) {
-      return { error: 'Already clocked in — clock out first.' }
-    }
-    // Previous-day stale session — auto-close at 11:59 PM of that day (employee TZ)
-    await supabaseAdmin
-      .from('time_logs')
-      .update({
-        clock_out_at:  endOfDayISO(existingSession.log_date, tz),
-        closed_reason: 'auto_logout',
-        auto_closed:   true,
-      })
-      .eq('id', existingSession.id)
+  if (error) {
+    // Unique index race — another request won
+    if (error.code === '23505') return { ok: true }
+    return { ok: false, error: error.message }
   }
+
+  revalidateTimePaths()
+  return { ok: true }
+}
+
+// ── Clock In (manual — once per local day) ──────────────────────────────────────
+
+export async function clockIn() {
+  const profile  = await requireProfile()
+  if (profile.role !== 'employee') {
+    return { error: 'Only employees can clock in here.' }
+  }
+
+  const tz       = resolveTimezone(profile.timezone)
+  const supabase = await createClient()
+
+  const { data: todayLog } = await getTodayLog(profile.id, tz, supabase)
+
+  if (todayLog) {
+    if (!todayLog.clock_out_at) {
+      return { error: 'Already clocked in today — clock out when you finish.' }
+    }
+    return { error: 'You already have a time entry for today (one session per day in your timezone).' }
+  }
+
+  await closeStaleOpenSession(profile.id, tz, supabase)
 
   const { data, error } = await supabase
     .from('time_logs')
-    .insert({ employee_id: profile.id })
+    .insert({
+      employee_id:     profile.id,
+      clock_in_source: 'manual',
+    })
     .select()
     .single()
 
-  if (error) return { error: error.message }
+  if (error) {
+    if (error.code === '23505') {
+      return { error: 'You already have a time entry for today (one session per day in your timezone).' }
+    }
+    return { error: error.message }
+  }
 
-  revalidatePath('/dashboard')
-  revalidatePath('/time')
+  revalidateTimePaths()
   return { data }
 }
 
 // ── Clock Out ─────────────────────────────────────────────────────────────────
 
 export async function clockOut() {
-  const profile = await requireProfile()
+  const profile  = await requireProfile()
   const supabase = await createClient()
 
   const { data: session } = await supabase
@@ -129,9 +200,7 @@ export async function clockOut() {
 
   if (error) return { error: error.message }
 
-  revalidatePath('/dashboard')
-  revalidatePath('/time')
-  revalidatePath('/time/team')
+  revalidateTimePaths()
   return { data }
 }
 
@@ -182,9 +251,6 @@ export async function adminCorrectTimeLog(
 }
 
 // ── Mechanism 3: Force Clock Out (Admin / Manager) ────────────────────────────
-// Closes an open session with a provided clock-out time.
-// Session is tagged auto_closed = true + reason = admin_correction.
-// Action is audited to activity_logs (tactic_id nullable after migration).
 
 export async function forceClockOut(
   timeLogId:   string,
@@ -199,7 +265,6 @@ export async function forceClockOut(
   const clockOut = new Date(clockOutAt)
   if (isNaN(clockOut.getTime())) return { error: 'Invalid datetime.' }
 
-  // Verify the viewer can see this session (RLS enforces team scope for managers)
   const supabase = await createClient()
   const { data: session } = await supabase
     .from('time_logs')
@@ -227,7 +292,6 @@ export async function forceClockOut(
 
   if (error) return { error: error.message }
 
-  // Audit trail — tactic_id is now nullable
   await supabaseAdmin.from('activity_logs').insert({
     tactic_id:   null,
     employee_id: employeeId,

@@ -16,6 +16,21 @@ import {
 } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
 
+function liveMinutes(l: {
+  duration_minutes: number | null
+  clock_out_at: string | null
+  clock_in_at: string
+}): number {
+  if (l.duration_minutes != null) return l.duration_minutes
+  if (!l.clock_out_at) {
+    return Math.max(
+      0,
+      Math.floor((Date.now() - new Date(l.clock_in_at).getTime()) / 60_000),
+    )
+  }
+  return 0
+}
+
 interface Props {
   params: { employeeId: string }
 }
@@ -70,17 +85,17 @@ export default async function EmployeeTimePage({ params }: Props) {
   const weekStart = startOfWeekInTimezone(tz)
 
   const todayMinutes = allLogs
-    .filter((l) => l.log_date === today && l.duration_minutes != null)
-    .reduce((s, l) => s + (l.duration_minutes ?? 0), 0)
+    .filter((l) => l.log_date === today)
+    .reduce((s, l) => s + liveMinutes(l), 0)
 
   const weekMinutes = allLogs
-    .filter((l) => l.log_date && l.log_date >= weekStart && l.duration_minutes != null)
-    .reduce((s, l) => s + (l.duration_minutes ?? 0), 0)
+    .filter((l) => l.log_date && l.log_date >= weekStart)
+    .reduce((s, l) => s + liveMinutes(l), 0)
 
   const minutesByDate: Record<string, number> = {}
   allLogs.forEach((l) => {
-    if (l.log_date && l.duration_minutes) {
-      minutesByDate[l.log_date] = (minutesByDate[l.log_date] ?? 0) + l.duration_minutes
+    if (l.log_date) {
+      minutesByDate[l.log_date] = (minutesByDate[l.log_date] ?? 0) + liveMinutes(l)
     }
   })
 
@@ -140,7 +155,7 @@ export default async function EmployeeTimePage({ params }: Props) {
 
       <div>
         <h3 className="mb-3 text-sm font-semibold text-neutral-700">Recent sessions</h3>
-        <TimeLogTable logs={allLogs} isAdmin={isAdmin} />
+        <TimeLogTable logs={allLogs} isAdmin={isAdmin} timeZone={tz} />
       </div>
     </div>
   )

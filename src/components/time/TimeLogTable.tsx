@@ -11,8 +11,12 @@ import type { TimeLog } from '@/lib/types'
 
 export { formatDuration } from '@/lib/utils/time-format'
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+function fmtTime(iso: string, timeZone?: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', {
+    hour:     '2-digit',
+    minute:   '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  })
 }
 
 function fmtDate(iso: string): string {
@@ -52,11 +56,12 @@ function StatusBadge({ reason, autoClosed }: { reason: string | null; autoClosed
 }
 
 interface Props {
-  logs:    TimeLog[]
-  isAdmin: boolean
+  logs:      TimeLog[]
+  isAdmin:   boolean
+  timeZone?: string
 }
 
-export function TimeLogTable({ logs, isAdmin }: Props) {
+export function TimeLogTable({ logs, isAdmin, timeZone }: Props) {
   const [rows,    setRows]    = useState<TimeLog[]>(logs)
   const [editing, setEditing] = useState<TimeLog | null>(null)
 
@@ -95,7 +100,18 @@ export function TimeLogTable({ logs, isAdmin }: Props) {
       accessorKey: 'clock_in_at',
       header: 'Clock in',
       cell: ({ getValue }) => (
-        <span className="font-mono text-sm">{fmtTime(getValue<string>())}</span>
+        <span className="font-mono text-sm">{fmtTime(getValue<string>(), timeZone)}</span>
+      ),
+    },
+    {
+      id: 'source',
+      header: 'Source',
+      cell: ({ row }) => (
+        row.original.clock_in_source === 'login' ? (
+          <Badge variant="info">Login</Badge>
+        ) : (
+          <Badge variant="default">Manual</Badge>
+        )
       ),
     },
     {
@@ -104,7 +120,7 @@ export function TimeLogTable({ logs, isAdmin }: Props) {
       cell: ({ getValue }) => {
         const v = getValue<string | null>()
         return v ? (
-          <span className="font-mono text-sm">{fmtTime(v)}</span>
+          <span className="font-mono text-sm">{fmtTime(v, timeZone)}</span>
         ) : (
           <span className="text-xs italic text-neutral-400">—</span>
         )

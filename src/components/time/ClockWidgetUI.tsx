@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Play, Square, Timer } from 'lucide-react'
+import { Play, Square, Timer, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { clockIn, clockOut } from '@/lib/actions/time'
 import { useToast } from '@/lib/store/toast'
+import { formatTimeInTimezone, timezoneShortLabel } from '@/lib/utils/timezones'
 import type { TimeLog } from '@/lib/types'
 
 function formatElapsed(seconds: number): string {
@@ -16,20 +17,28 @@ function formatElapsed(seconds: number): string {
 }
 
 interface Props {
-  initialSession: TimeLog | null
+  session:      TimeLog | null
+  timeZone:     string
+  dayComplete:  boolean
+  canClockIn:   boolean
 }
 
-export function ClockWidgetUI({ initialSession }: Props) {
+export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn }: Props) {
   const toast = useToast()
-  const [session, setSession] = useState<TimeLog | null>(initialSession)
+  const [activeSession, setActiveSession] = useState<TimeLog | null>(
+    session && !session.clock_out_at ? session : null,
+  )
   const [elapsed, setElapsed] = useState(0)
   const [busy,    setBusy]    = useState(false)
 
-  // Resume the timer from clock_in_at whenever a session exists
   useEffect(() => {
-    if (!session) { setElapsed(0); return }
+    setActiveSession(session && !session.clock_out_at ? session : null)
+  }, [session])
 
-    const startMs = new Date(session.clock_in_at).getTime()
+  useEffect(() => {
+    if (!activeSession) { setElapsed(0); return }
+
+    const startMs = new Date(activeSession.clock_in_at).getTime()
     setElapsed(Math.floor((Date.now() - startMs) / 1000))
 
     const id = setInterval(
@@ -37,14 +46,14 @@ export function ClockWidgetUI({ initialSession }: Props) {
       1000,
     )
     return () => clearInterval(id)
-  }, [session])
+  }, [activeSession])
 
   const handleClockIn = async () => {
     setBusy(true)
     const res = await clockIn()
     setBusy(false)
     if (res.error) { toast.error(res.error); return }
-    setSession(res.data ?? null)
+    setActiveSession(res.data ?? null)
     toast.success('Clocked in — have a productive day!')
   }
 
@@ -53,16 +62,43 @@ export function ClockWidgetUI({ initialSession }: Props) {
     const res = await clockOut()
     setBusy(false)
     if (res.error) { toast.error(res.error); return }
-    setSession(null)
+    setActiveSession(null)
     toast.success('Clocked out. Good work!')
   }
 
-  const active = !!session
+  const active = !!activeSession
+  const tzLabel = timezoneShortLabel(timeZone)
+  const loginSource = activeSession?.clock_in_source === 'login'
+
+  if (dayComplete && session) {
+    return (
+      <div className="card p-6">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-success-100">
+            <CheckCircle2 className="h-6 w-6 text-success-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-success-700">Today&apos;s shift complete</p>
+            <p className="text-xs text-neutral-500">
+              {formatTimeInTimezone(timeZone, new Date(session.clock_in_at))}
+              {' – '}
+              {session.clock_out_at
+                ? formatTimeInTimezone(timeZone, new Date(session.clock_out_at))
+                : '—'}
+              {' '}({tzLabel})
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              One session per day — you can clock in again tomorrow in your timezone.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between gap-4">
-        {/* Left: icon + label + timer */}
         <div className="flex items-center gap-4">
           <div
             className={cn(
@@ -83,18 +119,23 @@ export function ClockWidgetUI({ initialSession }: Props) {
               {active ? 'Currently clocked in' : 'Not clocked in'}
             </p>
             {active ? (
-              <p className="font-mono text-3xl font-bold tracking-widest text-neutral-900 tabular-nums">
-                {formatElapsed(elapsed)}
-              </p>
+              <>
+                <p className="font-mono text-3xl font-bold tracking-widest text-neutral-900 tabular-nums">
+                  {formatElapsed(elapsed)}
+                </p>
+                <p className="text-xs text-neutral-400">
+                  Since {formatTimeInTimezone(timeZone, new Date(activeSession!.clock_in_at))} {tzLabel}
+                  {loginSource ? ' · started at login' : ''}
+                </p>
+              </>
             ) : (
               <p className="text-xs text-neutral-400">
-                Clock in when you start working to track your time
+                Sign-in starts today&apos;s session automatically ({tzLabel}). Manual clock-in if needed.
               </p>
             )}
           </div>
         </div>
 
-        {/* Right: action button */}
         {active ? (
           <Button
             variant="destructive"
@@ -106,7 +147,7 @@ export function ClockWidgetUI({ initialSession }: Props) {
             <Square className="h-4 w-4 fill-current" />
             Clock Out
           </Button>
-        ) : (
+        ) : canClockIn ? (
           <Button
             size="lg"
             loading={busy}
@@ -116,7 +157,7 @@ export function ClockWidgetUI({ initialSession }: Props) {
             <Play className="h-4 w-4 fill-current" />
             Clock In
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
   )

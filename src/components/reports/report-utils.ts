@@ -1,13 +1,8 @@
 // Client-safe utilities — no 'use server', importable by client components
 
 import { todayInTimezone } from '@/lib/utils/dates'
-import { TIMEZONE_OPTIONS } from '@/lib/utils/timezones'
 
-export function timezoneShortLabel(timeZone: string): string {
-  const opt = TIMEZONE_OPTIONS.find((o) => o.value === timeZone)
-  if (!opt) return timeZone
-  return opt.label.split(' — ')[0] ?? timeZone
-}
+export { timezoneShortLabel } from '@/lib/utils/timezones'
 
 export function downloadCSV(
   filename: string,

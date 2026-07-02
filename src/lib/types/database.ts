@@ -374,6 +374,7 @@ export type Database = {
           duration_minutes: number | null   // set by trigger
           closed_reason: Database['public']['Enums']['clock_close_reason'] | null
           auto_closed: boolean              // true when closed by system/admin, not by the employee
+          clock_in_source: 'manual' | 'login'
           log_date: string                  // set by trigger from clock_in_at
           created_at: string
         }
@@ -385,6 +386,7 @@ export type Database = {
           duration_minutes?: number | null  // normally omitted; trigger calculates it
           closed_reason?: Database['public']['Enums']['clock_close_reason'] | null
           auto_closed?: boolean
+          clock_in_source?: 'manual' | 'login'
           created_at?: string
         }
         Update: {
@@ -395,6 +397,7 @@ export type Database = {
           duration_minutes?: number | null
           closed_reason?: Database['public']['Enums']['clock_close_reason'] | null
           auto_closed?: boolean
+          clock_in_source?: 'manual' | 'login'
         }
         Relationships: [
           {

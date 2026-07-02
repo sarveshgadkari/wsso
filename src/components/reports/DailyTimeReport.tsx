@@ -29,8 +29,8 @@ export function DailyTimeReport({ viewerTimezone }: Props) {
   function exportCSV() {
     downloadCSV(
       `daily-time-${date}.csv`,
-      ['Employee', 'Code', 'Date', 'Hours (decimal)', 'Hours (h:m)'],
-      rows.map(r => [r.full_name, r.employee_code, date, fmtDecimalHours(r.minutes), fmtHours(r.minutes)]),
+      ['Employee', 'Code', 'Timezone', 'Date', 'Hours (decimal)', 'Hours (h:m)'],
+      rows.map(r => [r.full_name, r.employee_code, r.timezone, date, fmtDecimalHours(r.minutes), fmtHours(r.minutes)]),
     )
   }
 
@@ -70,6 +70,7 @@ export function DailyTimeReport({ viewerTimezone }: Props) {
               <tr className="border-b border-neutral-200 bg-neutral-50">
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Employee</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Timezone</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-400">Hours</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-400">Hours (decimal)</th>
               </tr>
@@ -79,6 +80,7 @@ export function DailyTimeReport({ viewerTimezone }: Props) {
                 <tr key={r.id} className={r.minutes === 0 ? 'text-neutral-400' : ''}>
                   <td className="px-5 py-3 font-medium">{r.full_name}</td>
                   <td className="px-4 py-3 font-mono text-xs">{r.employee_code}</td>
+                  <td className="px-4 py-3 text-xs text-neutral-500">{r.timezone}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {r.minutes > 0 ? fmtHours(r.minutes) : '—'}
                   </td>
@@ -91,6 +93,7 @@ export function DailyTimeReport({ viewerTimezone }: Props) {
             <tfoot>
               <tr className="border-t-2 border-neutral-300 bg-neutral-50 font-semibold">
                 <td className="px-5 py-3">Total</td>
+                <td />
                 <td />
                 <td className="px-4 py-3 text-right tabular-nums">{fmtHours(total)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{fmtDecimalHours(total)}</td>

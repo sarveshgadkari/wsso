@@ -28,9 +28,9 @@ export function EmployeePerformanceReport({ viewerTimezone }: Props) {
   function exportCSV() {
     downloadCSV(
       `performance-${from}-${to}.csv`,
-      ['Employee', 'Code', 'Assigned (active)', 'Completed in range', 'Overdue', 'Avg completion (days)', 'Clock hours in range'],
+      ['Employee', 'Code', 'Timezone', 'Assigned (active)', 'Completed in range', 'Overdue', 'Avg completion (days)', 'Clock hours in range'],
       rows.map(r => [
-        r.full_name, r.employee_code,
+        r.full_name, r.employee_code, r.timezone,
         r.assigned, r.completed, r.overdue,
         r.avg_completion_days ?? '—',
         r.clock_hours,
@@ -82,6 +82,7 @@ export function EmployeePerformanceReport({ viewerTimezone }: Props) {
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50">
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Employee</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Timezone</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-400">Assigned</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-400">Completed</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-neutral-400">Overdue</th>
@@ -96,6 +97,7 @@ export function EmployeePerformanceReport({ viewerTimezone }: Props) {
                     <p className="font-medium text-neutral-800">{r.full_name}</p>
                     <p className="font-mono text-xs text-neutral-400">{r.employee_code}</p>
                   </td>
+                  <td className="px-4 py-3 text-xs text-neutral-500">{r.timezone}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{r.assigned}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-success-700">{r.completed}</td>
                   <td className="px-4 py-3 text-right tabular-nums">

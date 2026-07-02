@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
 import { todayInTimezone } from '@/lib/utils/dates'
-import { resolveTimezone } from '@/lib/utils/timezones'
+import { resolveTimezone, timezoneShortLabel } from '@/lib/utils/timezones'
 import type {
   DailyTimeRow, WeeklyTimeRow, PerformanceRow,
   ProjectProgressRow, WorkOrderRow,
@@ -31,17 +31,30 @@ async function viewerToday(): Promise<string> {
 
 // ── Raw Supabase row shapes ────────────────────────────────────────────────────
 
-interface RawTimeLog {
-  employee_id:      string
-  log_date:         string
-  duration_minutes: number | null
-  profile: { id: string; full_name: string; employee_code: string } | null
-}
-
 interface RawProfile {
   id:            string
   full_name:     string
   employee_code: string
+  timezone:      string | null
+}
+
+interface RawTimeLogRow {
+  employee_id:      string
+  log_date:         string
+  clock_in_at:      string
+  clock_out_at:     string | null
+  duration_minutes: number | null
+}
+
+function logMinutes(l: RawTimeLogRow): number {
+  if (l.duration_minutes != null) return l.duration_minutes
+  if (!l.clock_out_at) {
+    return Math.max(
+      0,
+      Math.floor((Date.now() - new Date(l.clock_in_at).getTime()) / 60_000),
+    )
+  }
+  return 0
 }
 
 
@@ -85,23 +98,23 @@ export async function getDailyTimeReport(date: string): Promise<DailyTimeRow[]> 
   const [profilesRes, logsRes] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, employee_code')
+      .select('id, full_name, employee_code, timezone')
       .eq('status', 'active')
       .order('full_name'),
     supabase
       .from('time_logs')
-      .select('employee_id, log_date, duration_minutes, profile:profiles!time_logs_employee_id_fkey(id, full_name, employee_code)')
-      .eq('log_date', date)
-      .not('duration_minutes', 'is', null),
+      .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
+      .eq('log_date', date),
   ])
 
   const profiles = (profilesRes.data ?? []) as RawProfile[]
-  const logs     = (logsRes.data     ?? []) as unknown as RawTimeLog[]
+  const logs     = (logsRes.data     ?? []) as RawTimeLogRow[]
 
   const minuteMap: Record<string, number> = {}
   logs.forEach(l => {
-    if (l.duration_minutes) {
-      minuteMap[l.employee_id] = (minuteMap[l.employee_id] ?? 0) + l.duration_minutes
+    const mins = logMinutes(l)
+    if (mins > 0) {
+      minuteMap[l.employee_id] = (minuteMap[l.employee_id] ?? 0) + mins
     }
   })
 
@@ -109,6 +122,7 @@ export async function getDailyTimeReport(date: string): Promise<DailyTimeRow[]> 
     id:            p.id,
     full_name:     p.full_name,
     employee_code: p.employee_code,
+    timezone:      timezoneShortLabel(resolveTimezone(p.timezone)),
     minutes:       minuteMap[p.id] ?? 0,
   }))
 }
@@ -129,32 +143,38 @@ export async function getWeeklyTimeReport(weekStartRaw: string): Promise<{
   const [profilesRes, logsRes] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, employee_code')
+      .select('id, full_name, employee_code, timezone')
       .eq('status', 'active')
       .order('full_name'),
     supabase
       .from('time_logs')
-      .select('employee_id, log_date, duration_minutes, profile:profiles!time_logs_employee_id_fkey(id, full_name, employee_code)')
+      .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
       .gte('log_date', weekStart)
-      .lte('log_date', weekEnd)
-      .not('duration_minutes', 'is', null),
+      .lte('log_date', weekEnd),
   ])
 
   const profiles = (profilesRes.data ?? []) as RawProfile[]
-  const logs     = (logsRes.data     ?? []) as unknown as RawTimeLog[]
+  const logs     = (logsRes.data     ?? []) as RawTimeLogRow[]
 
-  // Build per-employee per-day minutes map
   const map: Record<string, Record<string, number>> = {}
   logs.forEach(l => {
-    if (!l.duration_minutes) return
+    const mins = logMinutes(l)
+    if (mins <= 0) return
     if (!map[l.employee_id]) map[l.employee_id] = {}
-    map[l.employee_id][l.log_date] = (map[l.employee_id][l.log_date] ?? 0) + l.duration_minutes
+    map[l.employee_id][l.log_date] = (map[l.employee_id][l.log_date] ?? 0) + mins
   })
 
   const rows: WeeklyTimeRow[] = profiles.map(p => {
     const days  = map[p.id] ?? {}
     const total = dates.reduce((s, d) => s + (days[d] ?? 0), 0)
-    return { id: p.id, full_name: p.full_name, employee_code: p.employee_code, days, total }
+    return {
+      id:            p.id,
+      full_name:     p.full_name,
+      employee_code: p.employee_code,
+      timezone:      timezoneShortLabel(resolveTimezone(p.timezone)),
+      days,
+      total,
+    }
   })
 
   return { rows, weekStart, weekDates: dates }
@@ -174,7 +194,7 @@ export async function getEmployeePerformanceReport(
   const [profilesRes, assignedRes, completedRes, overdueRes, hoursRes] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, employee_code')
+      .select('id, full_name, employee_code, timezone')
       .eq('status', 'active')
       .order('full_name'),
     // All non-archived tactics (current workload)
@@ -193,19 +213,18 @@ export async function getEmployeePerformanceReport(
       .lt('due_date', today)
       .neq('status', 'done')
       .neq('status', 'archived'),
-    // Clock hours in the range
+    // Clock hours in the range (includes open sessions via logMinutes)
     supabase.from('time_logs')
-      .select('employee_id, duration_minutes')
+      .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
       .gte('log_date', from)
-      .lte('log_date', to)
-      .not('duration_minutes', 'is', null),
+      .lte('log_date', to),
   ])
 
   const profiles  = (profilesRes.data  ?? []) as RawProfile[]
   const assigned  = (assignedRes.data  ?? []) as { assigned_to: string }[]
   const completed = (completedRes.data ?? []) as { assigned_to: string; created_at: string; updated_at: string }[]
   const overdue   = (overdueRes.data   ?? []) as { assigned_to: string }[]
-  const hours     = (hoursRes.data     ?? []) as { employee_id: string; duration_minutes: number | null }[]
+  const hours     = (hoursRes.data     ?? []) as RawTimeLogRow[]
 
   const MS_PER_DAY = 1000 * 60 * 60 * 24
 
@@ -218,8 +237,11 @@ export async function getEmployeePerformanceReport(
 
   assigned.forEach(t  => { assignedMap[t.assigned_to]  = (assignedMap[t.assigned_to]  ?? 0) + 1 })
   overdue.forEach(t   => { overdueMap[t.assigned_to]   = (overdueMap[t.assigned_to]   ?? 0) + 1 })
-  hours.forEach(l     => {
-    if (l.duration_minutes) clockMinMap[l.employee_id] = (clockMinMap[l.employee_id] ?? 0) + l.duration_minutes
+  hours.forEach(l => {
+    const mins = logMinutes(l)
+    if (mins > 0) {
+      clockMinMap[l.employee_id] = (clockMinMap[l.employee_id] ?? 0) + mins
+    }
   })
   completed.forEach(t => {
     completedMap[t.assigned_to] = (completedMap[t.assigned_to] ?? 0) + 1
@@ -237,6 +259,7 @@ export async function getEmployeePerformanceReport(
       id:                  p.id,
       full_name:           p.full_name,
       employee_code:       p.employee_code,
+      timezone:            timezoneShortLabel(resolveTimezone(p.timezone)),
       assigned:            assignedMap[p.id]  ?? 0,
       completed:           completedMap[p.id] ?? 0,
       overdue:             overdueMap[p.id]   ?? 0,

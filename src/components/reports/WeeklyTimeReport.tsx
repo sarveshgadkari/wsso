@@ -71,9 +71,9 @@ export function WeeklyTimeReport({ viewerTimezone }: Props) {
     )
     downloadCSV(
       `weekly-time-${weekStart}.csv`,
-      ['Employee', 'Code', ...dayLabels, 'Total (h)', 'Total (decimal)'],
+      ['Employee', 'Code', 'Timezone', ...dayLabels, 'Total (h)', 'Total (decimal)'],
       rows.map(r => [
-        r.full_name, r.employee_code,
+        r.full_name, r.employee_code, r.timezone,
         ...dates.map(d => fmtDecimalHours(r.days[d] ?? 0)),
         fmtHours(r.total),
         fmtDecimalHours(r.total),
@@ -125,6 +125,7 @@ export function WeeklyTimeReport({ viewerTimezone }: Props) {
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50">
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Employee</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">TZ</th>
                 {dates.map(d => (
                   <th key={d} className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-neutral-400">
                     <div>{shortDay(d)}</div>
@@ -144,6 +145,7 @@ export function WeeklyTimeReport({ viewerTimezone }: Props) {
                     <p className="font-medium">{r.full_name}</p>
                     <p className="font-mono text-xs text-neutral-400">{r.employee_code}</p>
                   </td>
+                  <td className="px-3 py-3 text-xs text-neutral-500">{r.timezone}</td>
                   {dates.map(d => (
                     <td key={d} className="px-3 py-3 text-center tabular-nums text-xs">
                       {(r.days[d] ?? 0) > 0 ? fmtDecimalHours(r.days[d]) : <span className="text-neutral-300">—</span>}
@@ -161,6 +163,7 @@ export function WeeklyTimeReport({ viewerTimezone }: Props) {
             <tfoot>
               <tr className="border-t-2 border-neutral-300 bg-neutral-50 font-semibold">
                 <td className="px-5 py-3">Total</td>
+                <td />
                 {dates.map(d => (
                   <td key={d} className="px-3 py-3 text-center tabular-nums text-xs">
                     {totals[d] > 0 ? fmtDecimalHours(totals[d]) : '—'}
@@ -173,6 +176,12 @@ export function WeeklyTimeReport({ viewerTimezone }: Props) {
           </table>
         )}
       </div>
+
+      {!isPending && (
+        <p className="mt-2 text-right text-xs text-neutral-400">
+          Daily hours are grouped by each employee&apos;s local calendar day (timezone shown per row).
+        </p>
+      )}
     </div>
   )
 }

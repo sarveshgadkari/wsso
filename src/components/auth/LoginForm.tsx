@@ -6,6 +6,7 @@ import { z } from 'zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { recordLoginClockIn } from '@/lib/actions/time'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 
@@ -61,6 +62,8 @@ export function LoginForm() {
         return
       }
     }
+
+    await recordLoginClockIn()
 
     // Force a full route refresh so server components re-read the new session
     router.push('/dashboard')
