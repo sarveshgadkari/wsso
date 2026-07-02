@@ -1,4 +1,7 @@
+import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+
+const DEFAULT_FROM = 'onboarding@resend.dev'
 
 export interface SetPasswordEmailParams {
   email:         string
@@ -15,7 +18,7 @@ export interface SetPasswordEmailResult {
 }
 
 function appRedirectUrl(): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.vercel.app'
   return `${appUrl}/auth/callback?next=/reset-password`
 }
 
@@ -50,25 +53,18 @@ async function sendViaResend(
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return { sent: false, method: 'none', error: 'RESEND_API_KEY not configured' }
 
-  const from = process.env.EMAIL_FROM ?? 'WSSO <onboarding@resend.dev>'
+  const resend = new Resend(apiKey)
+  const from   = process.env.EMAIL_FROM ?? DEFAULT_FROM
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method:  'POST',
-    headers: {
-      Authorization:  `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to:      [params.email],
-      subject: 'Set up your WSSO account',
-      html:    welcomeHtml(params, link),
-    }),
+  const { error } = await resend.emails.send({
+    from,
+    to:      params.email,
+    subject: 'Set up your WSSO account',
+    html:    welcomeHtml(params, link),
   })
 
-  if (!res.ok) {
-    const body = await res.text()
-    return { sent: false, method: 'resend', error: body || `Resend HTTP ${res.status}` }
+  if (error) {
+    return { sent: false, method: 'resend', error: error.message }
   }
 
   return { sent: true, method: 'resend' }
@@ -102,7 +98,6 @@ export async function sendSetPasswordEmail(
     }
     const resendResult = await sendViaResend(params, link)
     if (resendResult.sent) return resendResult
-    // Fall back to Supabase if Resend fails
     const supabaseResult = await sendViaSupabase(params)
     if (supabaseResult.sent) return supabaseResult
     return {
