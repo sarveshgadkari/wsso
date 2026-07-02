@@ -1,6 +1,8 @@
 import Link from 'next/link'
+import type { ComponentType } from 'react'
 import { AlertCircle, Clock, CheckCircle2, CalendarDays, Timer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { getProfile } from '@/lib/auth/session'
 import { ClockWidget } from '@/components/time/ClockWidget'
 import { StatCard } from './StatCard'
 import { Badge } from '@/components/ui/Badge'
@@ -8,7 +10,13 @@ import {
   STATUS_LABEL, STATUS_VARIANT,
   PRIORITY_LABEL, PRIORITY_VARIANT,
 } from '@/lib/tactics-utils'
-import { isoDate, daysAgo, startOfWeekISO } from '@/lib/utils/dates'
+import {
+  todayInTimezone,
+  startOfWeekInTimezone,
+  daysAgo,
+  addCalendarDays,
+} from '@/lib/utils/dates'
+import { resolveTimezone } from '@/lib/utils/timezones'
 import type { TacticStatus, TacticPriority } from '@/lib/types'
 
 interface MyTacticRow {
@@ -20,11 +28,83 @@ interface MyTacticRow {
   priority: TacticPriority
 }
 
+function fmtHours(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+function TacticItem({ tactic, rowCls }: { tactic: MyTacticRow; rowCls?: string }) {
+  return (
+    <Link
+      href={`/tactics/${tactic.id}`}
+      className={`flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 ${rowCls ?? ''}`}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-neutral-800">{tactic.title}</p>
+        <p className="font-mono text-xs text-neutral-400">{tactic.code}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Badge variant={PRIORITY_VARIANT[tactic.priority]}>
+          {PRIORITY_LABEL[tactic.priority]}
+        </Badge>
+        <Badge variant={STATUS_VARIANT[tactic.status]}>
+          {STATUS_LABEL[tactic.status]}
+        </Badge>
+        {tactic.due_date && (
+          <span className="text-xs text-neutral-400">{tactic.due_date}</span>
+        )}
+      </div>
+    </Link>
+  )
+}
+
+function TacticSection({
+  icon: Icon,
+  label,
+  items,
+  iconCls,
+  rowCls,
+  emptyText,
+}: {
+  icon:      ComponentType<{ className?: string }>
+  label:     string
+  items:     MyTacticRow[]
+  iconCls:   string
+  rowCls?:   string
+  emptyText: string
+}) {
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 border-b border-neutral-200 px-5 py-3">
+        <Icon className={`h-4 w-4 ${iconCls}`} />
+        <h3 className="text-sm font-semibold text-neutral-700">{label}</h3>
+        <span className="ml-auto rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-500">
+          {items.length}
+        </span>
+      </div>
+      {items.length === 0 ? (
+        <p className="px-5 py-5 text-center text-sm text-neutral-400">{emptyText}</p>
+      ) : (
+        <ul className="divide-y divide-neutral-100">
+          {items.map(t => (
+            <li key={t.id}>
+              <TacticItem tactic={t} rowCls={rowCls} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export async function EmployeeDashboard() {
-  const supabase   = await createClient()
-  const today      = isoDate()
-  const weekStart  = startOfWeekISO()
-  const weekEnd    = isoDate((() => { const d = new Date(); d.setDate(d.getDate() + (7 - (d.getDay() === 0 ? 7 : d.getDay()))); return d })())
+  const profile  = await getProfile()
+  const tz       = resolveTimezone(profile?.timezone)
+  const supabase = await createClient()
+  const today      = todayInTimezone(tz)
+  const weekStart  = startOfWeekInTimezone(tz)
+  const weekEnd    = addCalendarDays(weekStart, 6)
   const thirtyAgo  = daysAgo(30)
 
   const [
@@ -33,22 +113,18 @@ export async function EmployeeDashboard() {
     weekLogsRes,
     completedRes,
   ] = await Promise.all([
-    // All non-archived tactics assigned to me
     supabase.from('tactics')
       .select('id, code, title, due_date, status, priority')
       .neq('status', 'archived')
       .order('due_date', { ascending: true, nullsFirst: false }),
-    // Today's hours
     supabase.from('time_logs')
       .select('duration_minutes')
       .eq('log_date', today)
       .not('duration_minutes', 'is', null),
-    // This week's hours
     supabase.from('time_logs')
       .select('duration_minutes')
       .gte('log_date', weekStart)
       .not('duration_minutes', 'is', null),
-    // Tactics I completed in the last 30 days
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'done')
@@ -57,7 +133,6 @@ export async function EmployeeDashboard() {
 
   const myTactics = (myTacticsRes.data ?? []) as MyTacticRow[]
 
-  // Split into buckets
   const overdue:   MyTacticRow[] = []
   const dueToday:  MyTacticRow[] = []
   const dueWeek:   MyTacticRow[] = []
@@ -71,89 +146,16 @@ export async function EmployeeDashboard() {
     remaining.push(t)
   })
 
-  // Summarise hours
   const sumMinutes = (rows: { duration_minutes: number | null }[]) =>
     rows.reduce((s, r) => s + (r.duration_minutes ?? 0), 0)
 
   const todayMin = sumMinutes(todayLogsRes.data ?? [])
   const weekMin  = sumMinutes(weekLogsRes.data  ?? [])
 
-  function fmtHours(minutes: number): string {
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return h > 0 ? `${h}h ${m}m` : `${m}m`
-  }
-
-  function TacticItem({ tactic, rowCls }: { tactic: MyTacticRow; rowCls?: string }) {
-    return (
-      <Link
-        href={`/tactics/${tactic.id}`}
-        className={`flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 ${rowCls ?? ''}`}
-      >
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-neutral-800">{tactic.title}</p>
-          <p className="font-mono text-xs text-neutral-400">{tactic.code}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={PRIORITY_VARIANT[tactic.priority]}>
-            {PRIORITY_LABEL[tactic.priority]}
-          </Badge>
-          <Badge variant={STATUS_VARIANT[tactic.status]}>
-            {STATUS_LABEL[tactic.status]}
-          </Badge>
-          {tactic.due_date && (
-            <span className="text-xs text-neutral-400">{tactic.due_date}</span>
-          )}
-        </div>
-      </Link>
-    )
-  }
-
-  function TacticSection({
-    icon: Icon,
-    label,
-    items,
-    iconCls,
-    rowCls,
-    emptyText,
-  }: {
-    icon:      React.ComponentType<{ className?: string }>
-    label:     string
-    items:     MyTacticRow[]
-    iconCls:   string
-    rowCls?:   string
-    emptyText: string
-  }) {
-    return (
-      <div className="card">
-        <div className="flex items-center gap-2 border-b border-neutral-200 px-5 py-3">
-          <Icon className={`h-4 w-4 ${iconCls}`} />
-          <h3 className="text-sm font-semibold text-neutral-700">{label}</h3>
-          <span className="ml-auto rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-500">
-            {items.length}
-          </span>
-        </div>
-        {items.length === 0 ? (
-          <p className="px-5 py-5 text-center text-sm text-neutral-400">{emptyText}</p>
-        ) : (
-          <ul className="divide-y divide-neutral-100">
-            {items.map(t => (
-              <li key={t.id}>
-                <TacticItem tactic={t} rowCls={rowCls} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col gap-6">
-      {/* Clock widget */}
       <ClockWidget />
 
-      {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
           label="Today"
@@ -183,7 +185,6 @@ export async function EmployeeDashboard() {
         />
       </div>
 
-      {/* Quick links */}
       <div className="flex gap-3">
         <Link
           href="/time"
@@ -201,7 +202,6 @@ export async function EmployeeDashboard() {
         </Link>
       </div>
 
-      {/* Task sections */}
       <TacticSection
         icon={AlertCircle}
         label="Overdue"

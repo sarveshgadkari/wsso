@@ -7,6 +7,13 @@ import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { TimeLogTable, formatDuration } from '@/components/time/TimeLogTable'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { ForceClockOutButton } from '@/components/time/ForceClockOutButton'
+import {
+  todayInTimezone,
+  startOfWeekInTimezone,
+  last7Days,
+  dayLabel,
+} from '@/lib/utils/dates'
+import { resolveTimezone } from '@/lib/utils/timezones'
 
 interface Props {
   params: { employeeId: string }
@@ -14,26 +21,6 @@ interface Props {
 
 export async function generateMetadata() {
   return { title: 'Employee Time — WSSO' }
-}
-
-function isoDate(d: Date) {
-  return d.toISOString().split('T')[0]
-}
-
-function startOfWeekISO(): string {
-  const d = new Date()
-  const day = d.getDay()
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
-  d.setHours(0, 0, 0, 0)
-  return isoDate(d)
-}
-
-function last7Days() {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
-    return isoDate(d)
-  })
 }
 
 export default async function EmployeeTimePage({ params }: Props) {
@@ -45,14 +32,19 @@ export default async function EmployeeTimePage({ params }: Props) {
   // RLS: if manager tries to access an employee outside their team, this returns null
   const { data: employee } = await supabase
     .from('profiles')
-    .select('id, full_name, employee_code, role')
+    .select('id, full_name, employee_code, role, timezone')
     .eq('id', params.employeeId)
     .single()
 
   if (!employee) notFound()
 
-  // Mechanism 2: close stale sessions for this employee before rendering
-  await closeStaleSessionsForEmployees([params.employeeId])
+  try {
+    await closeStaleSessionsForEmployees([params.employeeId])
+  } catch (err) {
+    console.error('[EmployeeTimePage] closeStaleSessionsForEmployees failed:', err)
+  }
+
+  const tz = resolveTimezone(employee.timezone)
 
   const thirtyAgo = new Date()
   thirtyAgo.setDate(thirtyAgo.getDate() - 30)
@@ -73,8 +65,8 @@ export default async function EmployeeTimePage({ params }: Props) {
   ])
 
   const allLogs  = logs ?? []
-  const today    = isoDate(new Date())
-  const weekStart = startOfWeekISO()
+  const today    = todayInTimezone(tz)
+  const weekStart = startOfWeekInTimezone(tz)
 
   const todayMinutes = allLogs
     .filter((l) => l.log_date === today && l.duration_minutes != null)
@@ -91,8 +83,8 @@ export default async function EmployeeTimePage({ params }: Props) {
     }
   })
 
-  const chartData: DayBar[] = last7Days().map((date) => ({
-    label: new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }),
+  const chartData: DayBar[] = last7Days(today).map((date) => ({
+    label: dayLabel(date),
     date,
     hours: Math.round(((minutesByDate[date] ?? 0) / 60) * 10) / 10,
   }))

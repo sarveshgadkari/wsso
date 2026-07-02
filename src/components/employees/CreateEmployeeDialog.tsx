@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/lib/store/toast'
 import type { Company, Team, Profile } from '@/lib/types'
 
+import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/utils/timezones'
+
 const schema = z.object({
   full_name:   z.string().min(1, 'Full name is required'),
   email:       z.string().email('Enter a valid email'),
@@ -20,6 +22,7 @@ const schema = z.object({
   department:  z.string().optional(),
   team_id:     z.string().optional(),
   manager_id:  z.string().optional(),
+  timezone:    z.string().min(1),
   company_ids: z.array(z.string()).min(1, 'Assign at least one company'),
 })
 
@@ -58,7 +61,7 @@ export function CreateEmployeeDialog({
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { role: 'employee', company_ids: [] },
+    defaultValues: { role: 'employee', company_ids: [], timezone: DEFAULT_TIMEZONE },
   })
 
   const watchedTeamId = watch('team_id')
@@ -188,6 +191,16 @@ export function CreateEmployeeDialog({
             <option value="director">Director</option>
             <option value="manager">Manager</option>
             <option value="employee">Employee</option>
+          </Select>
+
+          <Select
+            label="Timezone"
+            error={errors.timezone?.message}
+            {...register('timezone')}
+          >
+            {TIMEZONE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </Select>
 
           <div className="grid grid-cols-2 gap-4">

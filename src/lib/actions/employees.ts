@@ -4,12 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
+import { TIMEZONE_VALUES } from '@/lib/utils/timezones'
 
 const profileUpdateSchema = z.object({
   full_name:  z.string().min(1, 'Full name is required'),
   phone:      z.string().optional().nullable(),
   department: z.string().optional().nullable(),
   role:       z.enum(['admin', 'director', 'manager', 'employee']),
+  timezone:   z.enum(TIMEZONE_VALUES as [string, ...string[]]),
 })
 
 export async function updateEmployeeProfile(

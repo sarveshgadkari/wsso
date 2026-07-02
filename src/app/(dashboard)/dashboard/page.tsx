@@ -1,4 +1,5 @@
 import { requireProfile } from '@/lib/auth/session'
+import { resolveTimezone } from '@/lib/utils/timezones'
 import { AdminDashboard }    from '@/components/dashboard/AdminDashboard'
 import { ManagerDashboard }  from '@/components/dashboard/ManagerDashboard'
 import { EmployeeDashboard } from '@/components/dashboard/EmployeeDashboard'
@@ -7,6 +8,7 @@ export const metadata = { title: 'Dashboard — WSSO' }
 
 export default async function DashboardPage() {
   const profile = await requireProfile()
+  const tz      = resolveTimezone(profile.timezone)
 
   return (
     <div className="flex flex-col gap-6">
@@ -15,7 +17,12 @@ export default async function DashboardPage() {
           Welcome back, {profile.full_name}
         </h2>
         <p className="mt-1 text-sm text-neutral-500">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          {new Date().toLocaleDateString('en-US', {
+            weekday: 'long',
+            month:   'long',
+            day:     'numeric',
+            timeZone: tz,
+          })}
         </p>
       </div>
 

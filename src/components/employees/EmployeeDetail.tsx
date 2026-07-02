@@ -17,6 +17,7 @@ import { updateEmployeeOrg } from '@/lib/actions/org'
 import { useToast } from '@/lib/store/toast'
 import { ForceClockOutDialog } from '@/components/time/ForceClockOutDialog'
 import type { Profile, Team, Company, UserRole } from '@/lib/types'
+import { TIMEZONE_OPTIONS } from '@/lib/utils/timezones'
 
 export interface EmployeeDetailData extends Profile {
   team:              { id: string; name: string; code: string } | null
@@ -38,6 +39,7 @@ const profileSchema = z.object({
   phone:      z.string().optional().nullable(),
   department: z.string().optional().nullable(),
   role:       z.enum(['admin', 'director', 'manager', 'employee']),
+  timezone:   z.string().min(1),
 })
 type ProfileForm = z.infer<typeof profileSchema>
 
@@ -84,6 +86,7 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
       phone:      emp.phone      ?? '',
       department: emp.department ?? '',
       role:       emp.role,
+      timezone:   emp.timezone,
     },
   })
 
@@ -228,6 +231,16 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
               <option value="director">Director</option>
               <option value="manager">Manager</option>
               <option value="employee">Employee</option>
+            </Select>
+
+            <Select
+              label="Timezone"
+              error={errors.timezone?.message}
+              {...register('timezone')}
+            >
+              {TIMEZONE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </Select>
 
             {!isAdmin && (

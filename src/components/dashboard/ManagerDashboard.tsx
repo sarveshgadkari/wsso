@@ -3,7 +3,16 @@ import { Users, ListTodo, Loader, AlertCircle, Clock, ChevronRight, FileText } f
 import { createClient } from '@/lib/supabase/server'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
-import { isoDate, last7Days, daysAgo, dayLabel, startOfWeekISO } from '@/lib/utils/dates'
+import { getProfile } from '@/lib/auth/session'
+import { resolveTimezone } from '@/lib/utils/timezones'
+import {
+  isoDate,
+  todayInTimezone,
+  startOfWeekInTimezone,
+  last7Days,
+  daysAgo,
+  dayLabel,
+} from '@/lib/utils/dates'
 
 interface TeamMemberRow {
   id:            string
@@ -24,8 +33,9 @@ interface ReviewTacticRow {
 
 export async function ManagerDashboard() {
   const supabase   = await createClient()
-  const today      = isoDate()
-  const weekStart  = startOfWeekISO()
+  const viewer     = await getProfile()
+  const viewerTz   = resolveTimezone(viewer?.timezone)
+  const today      = todayInTimezone(viewerTz)
   const sevenAgo   = daysAgo(7)
 
   // All queries use the regular client — RLS auto-scopes to manager's team
@@ -62,12 +72,12 @@ export async function ManagerDashboard() {
       .eq('status', 'review'),
     // Team members for the table
     supabase.from('profiles')
-      .select('id, full_name, employee_code')
+      .select('id, full_name, employee_code, timezone')
       .eq('status', 'active'),
     // Today's time logs per employee
     supabase.from('time_logs')
       .select('employee_id, log_date, duration_minutes')
-      .gte('log_date', weekStart)
+      .gte('log_date', isoDate(daysAgo(14)))
       .not('duration_minutes', 'is', null),
     // Team hours per day last 7 days (for chart)
     supabase.from('time_logs')
@@ -92,13 +102,24 @@ export async function ManagerDashboard() {
     openByEmployee[t.assigned_to] = (openByEmployee[t.assigned_to] ?? 0) + 1
   })
 
-  // Build per-employee time stats from time_logs
+  // Build per-employee time stats from time_logs (each employee's local today/week)
+  const memberTz: Record<string, string> = {}
+  ;((teamMembersRes.data ?? []) as { id: string; timezone?: string }[]).forEach(m => {
+    memberTz[m.id] = resolveTimezone(m.timezone)
+  })
+
   const todayMinByEmployee: Record<string, number> = {}
   const weekMinByEmployee:  Record<string, number> = {}
   ;(timeLogsRes.data ?? []).forEach((l: { employee_id: string; log_date: string; duration_minutes: number | null }) => {
-    if (!l.duration_minutes) return
-    weekMinByEmployee[l.employee_id] = (weekMinByEmployee[l.employee_id] ?? 0) + l.duration_minutes
-    if (l.log_date === today) {
+    if (!l.duration_minutes || !l.log_date) return
+    const empTz        = memberTz[l.employee_id] ?? viewerTz
+    const empToday     = todayInTimezone(empTz)
+    const empWeekStart = startOfWeekInTimezone(empTz)
+
+    if (l.log_date >= empWeekStart) {
+      weekMinByEmployee[l.employee_id] = (weekMinByEmployee[l.employee_id] ?? 0) + l.duration_minutes
+    }
+    if (l.log_date === empToday) {
       todayMinByEmployee[l.employee_id] = (todayMinByEmployee[l.employee_id] ?? 0) + l.duration_minutes
     }
   })
@@ -119,7 +140,7 @@ export async function ManagerDashboard() {
       hoursByDate[l.log_date] = (hoursByDate[l.log_date] ?? 0) + l.duration_minutes
     }
   })
-  const hoursData: DayBar[] = last7Days().map(date => ({
+  const hoursData: DayBar[] = last7Days(today).map(date => ({
     label: dayLabel(date),
     date,
     hours: Math.round(((hoursByDate[date] ?? 0) / 60) * 10) / 10,

@@ -3,27 +3,14 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { TeamTimeTable, type EmployeeTimeStats } from '@/components/time/TeamTimeTable'
+import {
+  startOfMonthInTimezone,
+  startOfWeekInTimezone,
+  todayInTimezone,
+} from '@/lib/utils/dates'
+import { resolveTimezone } from '@/lib/utils/timezones'
 
 export const metadata = { title: 'Team Time — WSSO' }
-
-function isoDate(d: Date) {
-  return d.toISOString().split('T')[0]
-}
-
-function startOfWeekISO(): string {
-  const d = new Date()
-  const day = d.getDay()
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
-  d.setHours(0, 0, 0, 0)
-  return isoDate(d)
-}
-
-function startOfMonthISO(): string {
-  const d = new Date()
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return isoDate(d)
-}
 
 export default async function TeamTimePage() {
   const profile = await requireProfile()
@@ -31,17 +18,19 @@ export default async function TeamTimePage() {
 
   const supabase = await createClient()
 
-  // Profiles are RLS-scoped: manager sees own team, admin sees all
   const { data: employees } = await supabase
     .from('profiles')
-    .select('id, employee_code, full_name, team_id, status')
+    .select('id, employee_code, full_name, team_id, status, timezone')
     .eq('status', 'active')
     .order('full_name')
 
   const employeeIds = (employees ?? []).map((e) => e.id)
 
-  // Mechanism 2: close any stale open sessions (>16 h) before rendering
-  await closeStaleSessionsForEmployees(employeeIds)
+  try {
+    await closeStaleSessionsForEmployees(employeeIds)
+  } catch (err) {
+    console.error('[TeamTimePage] closeStaleSessionsForEmployees failed:', err)
+  }
 
   const { data: teams } = await supabase
     .from('teams')
@@ -49,9 +38,13 @@ export default async function TeamTimePage() {
 
   const teamMap = Object.fromEntries((teams ?? []).map((t) => [t.id, t.name]))
 
-  const monthStart = startOfMonthISO()
-  const today      = isoDate(new Date())
-  const weekStart  = startOfWeekISO()
+  const tzByEmployee: Record<string, string> = {}
+  ;(employees ?? []).forEach((e) => {
+    tzByEmployee[e.id] = resolveTimezone(e.timezone)
+  })
+
+  const monthStarts = employeeIds.map((id) => startOfMonthInTimezone(tzByEmployee[id]))
+  const monthStart  = monthStarts.length ? monthStarts.sort()[0] : startOfMonthInTimezone('UTC')
 
   const { data: logs } = employeeIds.length
     ? await supabase
@@ -61,7 +54,6 @@ export default async function TeamTimePage() {
         .gte('log_date', monthStart)
     : { data: [] }
 
-  // Aggregate per employee
   const agg: Record<string, {
     today: number; week: number; month: number
     autoLogouts: number; isActiveNow: boolean
@@ -75,11 +67,14 @@ export default async function TeamTimePage() {
         autoLogouts: 0, isActiveNow: false, openSession: null,
       }
     }
-    const a = agg[l.employee_id]
+    const a    = agg[l.employee_id]
     const mins = l.duration_minutes ?? 0
+    const tz   = tzByEmployee[l.employee_id]
+    const empToday     = todayInTimezone(tz)
+    const empWeekStart = startOfWeekInTimezone(tz)
 
-    if (l.log_date === today)                    a.today += mins
-    if (l.log_date && l.log_date >= weekStart)   a.week  += mins
+    if (l.log_date === empToday)                  a.today += mins
+    if (l.log_date && l.log_date >= empWeekStart) a.week  += mins
     a.month += mins
 
     if (l.closed_reason === 'auto_logout') a.autoLogouts++
@@ -110,6 +105,7 @@ export default async function TeamTimePage() {
           {profile.role === 'manager'
             ? 'Attendance overview for your team members this month.'
             : 'Attendance overview across all active employees this month.'}
+          {' '}Today/week totals use each employee&apos;s timezone.
         </p>
       </div>
 

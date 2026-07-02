@@ -8,7 +8,9 @@ import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
-import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel } from '@/lib/utils/dates'
+import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel, todayInTimezone } from '@/lib/utils/dates'
+import { getProfile } from '@/lib/auth/session'
+import { resolveTimezone } from '@/lib/utils/timezones'
 interface OverdueTacticRow {
   id:          string
   assigned_to: string
@@ -17,7 +19,9 @@ interface OverdueTacticRow {
 
 export async function AdminDashboard() {
   const supabase  = await createClient()
-  const today     = isoDate()
+  const viewer    = await getProfile()
+  const tz        = resolveTimezone(viewer?.timezone)
+  const today     = todayInTimezone(tz)
   const thirtyAgo = daysAgo(30)
   const sevenAgo  = daysAgo(7)
 
@@ -76,7 +80,11 @@ export async function AdminDashboard() {
 
   // Mechanism 2: close any stale open sessions (>16 h) for all active employees
   const activeEmployeeIds = (activeEmployeeIdsRes.data ?? []).map((e: { id: string }) => e.id)
-  await closeStaleSessionsForEmployees(activeEmployeeIds)
+  try {
+    await closeStaleSessionsForEmployees(activeEmployeeIds)
+  } catch (err) {
+    console.error('[AdminDashboard] closeStaleSessionsForEmployees failed:', err)
+  }
 
   const overdueTactics = (overdueTacticsRes.data ?? []) as unknown as OverdueTacticRow[]
   const overdueCount   = overdueTactics.length
@@ -97,7 +105,7 @@ export async function AdminDashboard() {
     const date = log.created_at.split('T')[0]
     completionByDate[date] = (completionByDate[date] ?? 0) + 1
   })
-  const completionData: CompletionBar[] = last30Days().map(date => ({
+  const completionData: CompletionBar[] = last30Days(today).map(date => ({
     label: monthDayLabel(date),
     date,
     count: completionByDate[date] ?? 0,
@@ -110,7 +118,7 @@ export async function AdminDashboard() {
       hoursByDate[l.log_date] = (hoursByDate[l.log_date] ?? 0) + l.duration_minutes
     }
   })
-  const hoursData: DayBar[] = last7Days().map(date => ({
+  const hoursData: DayBar[] = last7Days(today).map(date => ({
     label: dayLabel(date),
     date,
     hours: Math.round(((hoursByDate[date] ?? 0) / 60) * 10) / 10,

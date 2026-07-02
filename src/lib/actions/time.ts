@@ -5,12 +5,18 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth/session'
+import { endOfDayISO, todayInTimezone } from '@/lib/utils/dates'
+import { resolveTimezone } from '@/lib/utils/timezones'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function endOfDayUTC(isoDate: string): string {
-  // 23:59:00 UTC on the given date — used as auto-close cutoff
-  return `${isoDate}T23:59:00.000Z`
+async function employeeTimezone(employeeId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('timezone')
+    .eq('id', employeeId)
+    .single()
+  return resolveTimezone(data?.timezone)
 }
 
 // ── Mechanism 2: close stale open sessions for a set of employees ─────────────
@@ -27,7 +33,7 @@ export async function closeStaleSessionsForEmployees(
 
   const { data: stale } = await supabaseAdmin
     .from('time_logs')
-    .select('id, log_date')
+    .select('id, log_date, employee_id')
     .in('employee_id', employeeIds)
     .is('clock_out_at', null)
     .lt('clock_in_at', cutoff)
@@ -35,16 +41,18 @@ export async function closeStaleSessionsForEmployees(
   if (!stale?.length) return 0
 
   await Promise.all(
-    stale.map((s) =>
-      supabaseAdmin
+    stale.map(async (s) => {
+      const row = s as { id: string; log_date: string; employee_id: string }
+      const tz  = await employeeTimezone(row.employee_id)
+      return supabaseAdmin
         .from('time_logs')
         .update({
-          clock_out_at:  endOfDayUTC(s.log_date),
+          clock_out_at:  endOfDayISO(row.log_date, tz),
           closed_reason: 'auto_logout',
           auto_closed:   true,
         })
-        .eq('id', s.id),
-    ),
+        .eq('id', row.id)
+    }),
   )
 
   return stale.length
@@ -59,7 +67,8 @@ export async function clockIn() {
   const profile = await requireProfile()
   const supabase = await createClient()
 
-  const today = new Date().toISOString().split('T')[0]
+  const tz    = resolveTimezone(profile.timezone)
+  const today = todayInTimezone(tz)
 
   const { data: existingSession } = await supabase
     .from('time_logs')
@@ -72,11 +81,11 @@ export async function clockIn() {
     if (existingSession.log_date === today) {
       return { error: 'Already clocked in — clock out first.' }
     }
-    // Previous-day stale session — auto-close at 11:59 PM of that day
+    // Previous-day stale session — auto-close at 11:59 PM of that day (employee TZ)
     await supabaseAdmin
       .from('time_logs')
       .update({
-        clock_out_at:  endOfDayUTC(existingSession.log_date),
+        clock_out_at:  endOfDayISO(existingSession.log_date, tz),
         closed_reason: 'auto_logout',
         auto_closed:   true,
       })

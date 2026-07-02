@@ -17,6 +17,7 @@ export type Database = {
           manager_id: string | null
           team_id: string | null
           department: string | null
+          timezone: string
           status: Database['public']['Enums']['profile_status']
           created_at: string
           updated_at: string
@@ -31,6 +32,7 @@ export type Database = {
           manager_id?: string | null
           team_id?: string | null
           department?: string | null
+          timezone?: string
           status?: Database['public']['Enums']['profile_status']
           created_at?: string
           updated_at?: string
@@ -45,6 +47,7 @@ export type Database = {
           manager_id?: string | null
           team_id?: string | null
           department?: string | null
+          timezone?: string
           status?: Database['public']['Enums']['profile_status']
           updated_at?: string
         }
