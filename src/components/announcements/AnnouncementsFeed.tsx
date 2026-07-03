@@ -1,7 +1,7 @@
 'use client'
 
 import { Megaphone } from 'lucide-react'
-import type { AnnouncementWithSender } from '@/lib/actions/announcements'
+import type { AnnouncementFeedItem } from '@/lib/actions/announcements'
 
 function timeAgo(iso: string | null): string {
   if (!iso) return ''
@@ -17,11 +17,13 @@ function timeAgo(iso: string | null): string {
 }
 
 interface Props {
-  announcements: AnnouncementWithSender[]
+  announcements: AnnouncementFeedItem[]
 }
 
 export function AnnouncementsFeed({ announcements }: Props) {
-  if (announcements.length === 0) {
+  const items = (announcements ?? []).filter(a => a?.id)
+
+  if (items.length === 0) {
     return (
       <div className="card flex h-48 flex-col items-center justify-center gap-3 text-neutral-400">
         <Megaphone className="h-8 w-8 text-neutral-300" />
@@ -32,14 +34,14 @@ export function AnnouncementsFeed({ announcements }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {announcements.map(a => (
+      {items.map(a => (
         <article key={a.id} className="card overflow-hidden">
           <div className="border-b border-neutral-100 bg-neutral-50 px-5 py-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">{a.title}</h3>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  From {(a.sender?.full_name) ?? 'Unknown'}
+                  From {a.senderName}
                   {a.published_at && <> · {timeAgo(a.published_at)}</>}
                 </p>
               </div>

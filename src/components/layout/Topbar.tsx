@@ -46,7 +46,7 @@ export function Topbar({ profile, notifCount }: TopbarProps) {
     PAGE_TITLES.find(([path]) => pathname === path || pathname.startsWith(path + '/'))?.[1] ??
     'WSSO'
 
-  const firstName = profile.full_name.split(' ')[0]
+  const firstName = (profile?.full_name ?? 'User').split(' ')[0]
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6">

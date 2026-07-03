@@ -1,7 +1,7 @@
 'use client'
 
 import { Mail, Users } from 'lucide-react'
-import type { AnnouncementWithSender } from '@/lib/actions/announcements'
+import type { SentAnnouncementItem } from '@/lib/actions/announcements'
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—'
@@ -12,11 +12,11 @@ function fmtDate(iso: string | null): string {
 }
 
 interface Props {
-  announcements: AnnouncementWithSender[]
+  announcements: SentAnnouncementItem[]
 }
 
 export function SentAnnouncementsList({ announcements }: Props) {
-  const published = announcements.filter(a => a.status === 'published')
+  const published = (announcements ?? []).filter(a => a?.id && a.status === 'published')
 
   if (published.length === 0) {
     return (
@@ -39,7 +39,7 @@ export function SentAnnouncementsList({ announcements }: Props) {
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-neutral-400">
                   <span className="flex items-center gap-1">
                     <Users className="h-3 w-3" />
-                    {a.recipient_ids.length} recipient{a.recipient_ids.length !== 1 ? 's' : ''}
+                    {a.recipientCount} recipient{a.recipientCount !== 1 ? 's' : ''}
                   </span>
                   <span>{fmtDate(a.published_at)}</span>
                   {a.email_sent_at && (

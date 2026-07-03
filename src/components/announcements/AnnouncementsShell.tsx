@@ -2,9 +2,12 @@
 
 import { useState } from 'react'
 import { Megaphone, Mail, Users } from 'lucide-react'
-import type { AnnouncementWithSender } from '@/lib/actions/announcements'
-import type { Announcement, Profile } from '@/lib/types'
-import type { AnnouncementRecipient } from '@/lib/actions/announcements'
+import type {
+  AnnouncementFeedItem,
+  SentAnnouncementItem,
+  AnnouncementRecipient,
+} from '@/lib/actions/announcements'
+import type { Announcement } from '@/lib/types'
 import { AnnouncementsFeed } from './AnnouncementsFeed'
 import { AnnouncementComposer } from './AnnouncementComposer'
 import { SentAnnouncementsList } from './SentAnnouncementsList'
@@ -12,17 +15,17 @@ import { SentAnnouncementsList } from './SentAnnouncementsList'
 type Tab = 'feed' | 'compose' | 'sent'
 
 interface Props {
-  viewer:          Profile
+  viewerName:      string
   canSend:         boolean
-  feed:            AnnouncementWithSender[]
-  sent:            AnnouncementWithSender[]
+  feed:            AnnouncementFeedItem[]
+  sent:            SentAnnouncementItem[]
   drafts:          Announcement[]
   recipients:      AnnouncementRecipient[]
   initialTab?:     Tab
 }
 
 export function AnnouncementsShell({
-  viewer,
+  viewerName,
   canSend,
   feed,
   sent,
@@ -32,6 +35,11 @@ export function AnnouncementsShell({
 }: Props) {
   const [tab, setTab] = useState<Tab>(canSend ? initialTab : 'feed')
   const [editingDraft, setEditingDraft] = useState<Announcement | null>(null)
+
+  const safeFeed = (feed ?? []).filter(a => a?.id)
+  const safeSent = (sent ?? []).filter(a => a?.id)
+  const safeDrafts = (drafts ?? []).filter(d => d?.id)
+  const safeRecipients = (recipients ?? []).filter(r => r?.id && r?.full_name && r?.email)
 
   const tabs: { id: Tab; label: string; icon: typeof Megaphone; show: boolean }[] = [
     { id: 'feed',    label: 'Announcements', icon: Megaphone, show: true },
@@ -75,9 +83,9 @@ export function AnnouncementsShell({
             >
               <Icon className="h-4 w-4" />
               {t.label}
-              {t.id === 'feed' && feed.length > 0 && (
+              {t.id === 'feed' && safeFeed.length > 0 && (
                 <span className="rounded-full bg-primary-100 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
-                  {feed.length}
+                  {safeFeed.length}
                 </span>
               )}
             </button>
@@ -85,22 +93,22 @@ export function AnnouncementsShell({
         })}
       </div>
 
-      {tab === 'feed' && <AnnouncementsFeed announcements={feed} />}
+      {tab === 'feed' && <AnnouncementsFeed announcements={safeFeed} />}
 
       {tab === 'compose' && canSend && (
         <AnnouncementComposer
-          recipients={recipients}
-          drafts={drafts}
+          recipients={safeRecipients}
+          drafts={safeDrafts}
           editingDraft={editingDraft}
           onEditDraft={handleEditDraft}
           onDone={handleComposeDone}
           onCancelEdit={() => setEditingDraft(null)}
-          senderName={viewer?.full_name ?? 'Unknown'}
+          senderName={viewerName}
         />
       )}
 
       {tab === 'sent' && canSend && (
-        <SentAnnouncementsList announcements={sent} />
+        <SentAnnouncementsList announcements={safeSent} />
       )}
     </div>
   )

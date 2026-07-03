@@ -20,6 +20,58 @@ export interface AnnouncementWithSender extends Announcement {
   sender: Pick<Profile, 'id' | 'full_name' | 'employee_code' | 'role'> | null
 }
 
+/** Serializable feed item — no nested profile objects on the client */
+export interface AnnouncementFeedItem {
+  id:            string
+  title:         string
+  body:          string
+  senderName:    string
+  published_at:  string | null
+  email_sent_at: string | null
+}
+
+/** Serializable sent-history item */
+export interface SentAnnouncementItem {
+  id:              string
+  title:           string
+  body:            string
+  status:          string
+  recipientCount:  number
+  send_email:      boolean
+  published_at:    string | null
+  email_sent_at:   string | null
+}
+
+function senderDisplayName(
+  sender: Pick<Profile, 'full_name'> | null | undefined,
+): string {
+  return sender?.full_name?.trim() || 'Unknown'
+}
+
+function toFeedItem(a: AnnouncementWithSender): AnnouncementFeedItem {
+  return {
+    id:            a.id,
+    title:         a.title,
+    body:          a.body,
+    senderName:    senderDisplayName(a.sender),
+    published_at:  a.published_at,
+    email_sent_at: a.email_sent_at,
+  }
+}
+
+function toSentItem(a: AnnouncementWithSender): SentAnnouncementItem {
+  return {
+    id:             a.id,
+    title:          a.title,
+    body:           a.body,
+    status:         a.status,
+    recipientCount: a.recipient_ids?.length ?? 0,
+    send_email:     a.send_email,
+    published_at:   a.published_at,
+    email_sent_at:  a.email_sent_at,
+  }
+}
+
 const composeSchema = z.object({
   title:         z.string().min(1, 'Subject is required').max(200),
   body:          z.string().min(1, 'Message is required').max(10000),
@@ -134,7 +186,7 @@ export async function getAnnouncementRecipients(): Promise<AnnouncementRecipient
   return (data ?? []).filter(isValidRecipient) as AnnouncementRecipient[]
 }
 
-export async function getReceivedAnnouncements(): Promise<AnnouncementWithSender[]> {
+export async function getReceivedAnnouncements(): Promise<AnnouncementFeedItem[]> {
   const profile = await requireProfile()
   const supabase = await createClient()
 
@@ -146,10 +198,11 @@ export async function getReceivedAnnouncements(): Promise<AnnouncementWithSender
     .order('published_at', { ascending: false })
     .limit(50)
 
-  return enrichWithSenders((data ?? []) as Announcement[])
+  const enriched = await enrichWithSenders((data ?? []) as Announcement[])
+  return enriched.map(toFeedItem)
 }
 
-export async function getSentAnnouncements(): Promise<AnnouncementWithSender[]> {
+export async function getSentAnnouncements(): Promise<SentAnnouncementItem[]> {
   const profile = await requireRole(['admin', 'manager'])
   const supabase = await createClient()
 
@@ -160,7 +213,8 @@ export async function getSentAnnouncements(): Promise<AnnouncementWithSender[]> 
     .order('created_at', { ascending: false })
     .limit(50)
 
-  return enrichWithSenders((data ?? []) as Announcement[])
+  const enriched = await enrichWithSenders((data ?? []) as Announcement[])
+  return enriched.map(toSentItem)
 }
 
 export async function getAnnouncementDrafts(): Promise<Announcement[]> {

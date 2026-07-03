@@ -32,7 +32,7 @@ export default async function AnnouncementsPage({ searchParams }: Props) {
 
   return (
     <AnnouncementsShell
-      viewer={profile}
+      viewerName={profile.full_name?.trim() || 'Unknown'}
       canSend={canSend}
       feed={feed}
       sent={sent}
