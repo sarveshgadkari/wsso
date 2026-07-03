@@ -45,6 +45,32 @@ async function getManagedTeamMemberIds(managerId: string): Promise<string[]> {
   return (members ?? []).map(m => m.id)
 }
 
+type SenderInfo = Pick<Profile, 'id' | 'full_name' | 'employee_code' | 'role'>
+
+function isValidRecipient(r: AnnouncementRecipient | null | undefined): r is AnnouncementRecipient {
+  return !!(r?.id && r?.full_name && r?.email)
+}
+
+/** Resolve sender names via admin client — profile embeds fail under RLS for employees. */
+async function enrichWithSenders(announcements: Announcement[]): Promise<AnnouncementWithSender[]> {
+  if (announcements.length === 0) return []
+
+  const creatorIds = Array.from(new Set(announcements.map(a => a.created_by)))
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, employee_code, role')
+    .in('id', creatorIds)
+
+  const byId = Object.fromEntries(
+    ((profiles ?? []) as SenderInfo[]).map(p => [p.id, p]),
+  )
+
+  return announcements.map(a => ({
+    ...a,
+    sender: byId[a.created_by] ?? null,
+  }))
+}
+
 async function assertRecipientsAllowed(
   sender: Profile,
   recipientIds: string[],
@@ -91,7 +117,7 @@ export async function getAnnouncementRecipients(): Promise<AnnouncementRecipient
       .neq('id', profile.id)
       .order('full_name')
 
-    return (data ?? []) as AnnouncementRecipient[]
+    return (data ?? []).filter(isValidRecipient) as AnnouncementRecipient[]
   }
 
   const teamMemberIds = await getManagedTeamMemberIds(profile.id)
@@ -105,7 +131,7 @@ export async function getAnnouncementRecipients(): Promise<AnnouncementRecipient
     .neq('id', profile.id)
     .order('full_name')
 
-  return (data ?? []) as AnnouncementRecipient[]
+  return (data ?? []).filter(isValidRecipient) as AnnouncementRecipient[]
 }
 
 export async function getReceivedAnnouncements(): Promise<AnnouncementWithSender[]> {
@@ -114,16 +140,13 @@ export async function getReceivedAnnouncements(): Promise<AnnouncementWithSender
 
   const { data } = await supabase
     .from('announcements')
-    .select(`
-      *,
-      sender:profiles!announcements_created_by_fkey(id, full_name, employee_code, role)
-    `)
+    .select('*')
     .eq('status', 'published')
     .contains('recipient_ids', [profile.id])
     .order('published_at', { ascending: false })
     .limit(50)
 
-  return (data ?? []) as unknown as AnnouncementWithSender[]
+  return enrichWithSenders((data ?? []) as Announcement[])
 }
 
 export async function getSentAnnouncements(): Promise<AnnouncementWithSender[]> {
@@ -132,15 +155,12 @@ export async function getSentAnnouncements(): Promise<AnnouncementWithSender[]> 
 
   const { data } = await supabase
     .from('announcements')
-    .select(`
-      *,
-      sender:profiles!announcements_created_by_fkey(id, full_name, employee_code, role)
-    `)
+    .select('*')
     .eq('created_by', profile.id)
     .order('created_at', { ascending: false })
     .limit(50)
 
-  return (data ?? []) as unknown as AnnouncementWithSender[]
+  return enrichWithSenders((data ?? []) as Announcement[])
 }
 
 export async function getAnnouncementDrafts(): Promise<Announcement[]> {

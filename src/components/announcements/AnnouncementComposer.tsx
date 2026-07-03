@@ -57,15 +57,21 @@ export function AnnouncementComposer({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return recipients
-    return recipients.filter(r =>
+    const valid = recipients.filter(r => r?.id && r?.full_name && r?.email)
+    if (!q) return valid
+    return valid.filter(r =>
       r.full_name.toLowerCase().includes(q) ||
       r.email.toLowerCase().includes(q) ||
-      r.employee_code.toLowerCase().includes(q),
+      (r.employee_code ?? '').toLowerCase().includes(q),
     )
   }, [recipients, search])
 
-  const allSelected = recipients.length > 0 && selected.size === recipients.length
+  const validRecipients = useMemo(
+    () => recipients.filter(r => r?.id && r?.full_name && r?.email),
+    [recipients],
+  )
+
+  const allSelected = validRecipients.length > 0 && selected.size === validRecipients.length
 
   function toggleOne(id: string) {
     setSelected(prev => {
@@ -80,7 +86,7 @@ export function AnnouncementComposer({
     if (allSelected) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(recipients.map(r => r.id)))
+      setSelected(new Set(validRecipients.map(r => r.id)))
     }
   }
 
@@ -275,7 +281,7 @@ export function AnnouncementComposer({
                   className="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-neutral-800">{r.full_name}</p>
+                  <p className="text-sm font-medium text-neutral-800">{r.full_name ?? 'Unknown'}</p>
                   <p className="truncate text-xs text-neutral-400">
                     {r.employee_code} · {r.email}
                   </p>
@@ -285,7 +291,7 @@ export function AnnouncementComposer({
           ))}
           {filtered.length === 0 && (
             <li className="px-5 py-8 text-center text-sm text-neutral-400">
-              {recipients.length === 0 ? 'No team members available' : 'No matches'}
+              {validRecipients.length === 0 ? 'No team members available' : 'No matches'}
             </li>
           )}
         </ul>

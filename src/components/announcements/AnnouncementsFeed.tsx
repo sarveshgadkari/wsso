@@ -39,7 +39,7 @@ export function AnnouncementsFeed({ announcements }: Props) {
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">{a.title}</h3>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  From {a.sender?.full_name ?? 'Unknown'}
+                  From {(a.sender?.full_name) ?? 'Unknown'}
                   {a.published_at && <> · {timeAgo(a.published_at)}</>}
                 </p>
               </div>

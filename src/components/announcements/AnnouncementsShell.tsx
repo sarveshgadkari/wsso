@@ -95,7 +95,7 @@ export function AnnouncementsShell({
           onEditDraft={handleEditDraft}
           onDone={handleComposeDone}
           onCancelEdit={() => setEditingDraft(null)}
-          senderName={viewer.full_name}
+          senderName={viewer?.full_name ?? 'Unknown'}
         />
       )}
 
