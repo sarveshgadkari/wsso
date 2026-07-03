@@ -10,7 +10,7 @@ export interface ActivityLogRow {
   hours_logged: number | null
   notes:        string | null
   created_at:   string
-  actor: { id: string; full_name: string; employee_code: string }
+  actor: { id: string; full_name: string; employee_code: string } | null
 }
 
 interface Props {
@@ -58,7 +58,7 @@ export function ActivityTimeline({ logs }: Props) {
             <div className="min-w-0 flex-1 pt-1">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-sm text-neutral-800">
-                  <span className="font-medium">{log.actor.full_name}</span>
+                  <span className="font-medium">{log.actor?.full_name ?? 'Unknown'}</span>
                   {' '}
                   <span className="text-neutral-600">{log.action.replace('Tactic created', 'Work order created').replace('Tactic updated', 'Work order updated')}</span>
                   {log.hours_logged != null && (

@@ -2,6 +2,7 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { TacticsList } from '@/components/tactics/TacticsList'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
+import { enrichTacticRows } from '@/lib/tactics/enrich-profiles'
 
 export const metadata = { title: 'Work Orders — WSSO' }
 
@@ -38,7 +39,7 @@ export default async function TacticsPage() {
       .order('name'),
   ])
 
-  const tactics   = (tacticsRes.data   ?? []) as unknown as TacticRow[]
+  const tactics   = await enrichTacticRows((tacticsRes.data ?? []) as unknown as TacticRow[])
   const employees = (employeesRes.data ?? []) as { id: string; full_name: string; employee_code: string }[]
   const projects  = (projectsRes.data  ?? []) as { id: string; name: string; code: string }[]
 

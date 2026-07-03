@@ -93,7 +93,7 @@ function KanbanCard({
       {/* Assignee */}
       <div className="flex items-center gap-1.5 text-xs text-neutral-500">
         <User className="h-3 w-3 shrink-0" />
-        <span className="truncate">{tactic.assignee.full_name}</span>
+        <span className="truncate">{tactic.assignee?.full_name ?? 'Unknown'}</span>
       </div>
 
       {/* Project + due date */}
@@ -363,7 +363,7 @@ export function KanbanBoard({ initialTactics, role }: Props) {
                 <p className="line-clamp-2 text-sm font-medium text-neutral-800">{activeTactic.title}</p>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-neutral-500">
                   <User className="h-3 w-3 shrink-0" />
-                  {activeTactic.assignee.full_name}
+                  {activeTactic.assignee?.full_name ?? 'Unknown'}
                 </div>
               </div>
             )}

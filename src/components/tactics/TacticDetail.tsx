@@ -116,10 +116,12 @@ export function TacticDetail({
         <h3 className="mb-4 text-sm font-semibold text-neutral-800">Details</h3>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <MetaItem icon={User} label="Assigned to">
-            {tactic.assignee.full_name}
-            <span className="ml-1.5 font-mono text-xs text-neutral-400">
-              ({tactic.assignee.employee_code})
-            </span>
+            {tactic.assignee?.full_name ?? 'Unknown'}
+            {tactic.assignee?.employee_code && (
+              <span className="ml-1.5 font-mono text-xs text-neutral-400">
+                ({tactic.assignee.employee_code})
+              </span>
+            )}
           </MetaItem>
 
           <MetaItem icon={Briefcase} label="Project">
@@ -147,7 +149,7 @@ export function TacticDetail({
           </MetaItem>
 
           <MetaItem icon={Flag} label="Created by">
-            {tactic.creator.full_name}
+            {tactic.creator?.full_name ?? 'Unknown'}
           </MetaItem>
         </div>
       </div>

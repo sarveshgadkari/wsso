@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TacticDetail } from '@/components/tactics/TacticDetail'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 import type { ActivityLogRow } from '@/components/tactics/ActivityTimeline'
+import { enrichTacticRows, enrichActivityLogActors } from '@/lib/tactics/enrich-profiles'
 
 interface Props {
   params: { id: string }
@@ -57,8 +58,10 @@ export default async function TacticDetailPage({ params }: Props) {
 
   if (!tacticRes.data) notFound()
 
-  const tactic    = tacticRes.data  as unknown as TacticRow
-  const logs      = (logsRes.data   ?? []) as unknown as ActivityLogRow[]
+  const [tactic] = await enrichTacticRows([tacticRes.data as unknown as TacticRow])
+  const logs     = await enrichActivityLogActors(
+    (logsRes.data ?? []) as unknown as ActivityLogRow[],
+  )
   const employees = (employeesRes.data ?? []) as { id: string; full_name: string; employee_code: string }[]
   const projects  = (projectsRes.data  ?? []) as { id: string; name: string; code: string }[]
 

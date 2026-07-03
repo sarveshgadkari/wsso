@@ -15,8 +15,8 @@ import type { Tactic, TacticPriority } from '@/lib/types'
 // Rich row type with denormalised joins — used across Tactics & Kanban
 export interface TacticRow extends Tactic {
   project:  { id: string; name: string; code: string } | null
-  assignee: { id: string; full_name: string; employee_code: string }
-  creator:  { id: string; full_name: string; employee_code: string }
+  assignee: { id: string; full_name: string; employee_code: string } | null
+  creator:  { id: string; full_name: string; employee_code: string } | null
 }
 
 export type EmployeeOption = { id: string; full_name: string; employee_code: string }

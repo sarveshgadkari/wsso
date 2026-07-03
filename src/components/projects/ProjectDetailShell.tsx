@@ -184,7 +184,7 @@ export function ProjectDetailShell({
                     <span className="shrink-0 font-mono text-xs text-neutral-400">{t.code}</span>
                     <span className="truncate text-sm font-medium text-neutral-800">{t.title}</span>
                     <span className="hidden shrink-0 text-xs text-neutral-400 sm:block">
-                      {t.assignee.full_name}
+                      {t.assignee?.full_name ?? 'Unknown'}
                     </span>
                   </div>
                   <div className="ml-3 flex shrink-0 items-center gap-2">

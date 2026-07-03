@@ -2,6 +2,7 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
+import { enrichTacticRows } from '@/lib/tactics/enrich-profiles'
 
 export const metadata = { title: 'Kanban — WSSO' }
 
@@ -19,7 +20,7 @@ export default async function KanbanPage() {
     `)
     .order('created_at', { ascending: false })
 
-  const tactics = (data ?? []) as unknown as TacticRow[]
+  const tactics = await enrichTacticRows((data ?? []) as unknown as TacticRow[])
 
   return (
     <div className="flex flex-col gap-4">

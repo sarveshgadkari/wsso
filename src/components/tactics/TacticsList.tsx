@@ -167,7 +167,7 @@ export function TacticsList({
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-sm text-neutral-700">
-                        {t.assignee.full_name}
+                        {t.assignee?.full_name ?? 'Unknown'}
                       </td>
                       <td className="px-4 py-3 text-sm text-neutral-500">
                         {t.project?.name ?? <span className="text-neutral-300">—</span>}

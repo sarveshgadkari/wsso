@@ -60,8 +60,8 @@ export function AnnouncementComposer({
     const valid = recipients.filter(r => r?.id && r?.full_name && r?.email)
     if (!q) return valid
     return valid.filter(r =>
-      r.full_name.toLowerCase().includes(q) ||
-      r.email.toLowerCase().includes(q) ||
+      (r.full_name ?? '').toLowerCase().includes(q) ||
+      (r.email ?? '').toLowerCase().includes(q) ||
       (r.employee_code ?? '').toLowerCase().includes(q),
     )
   }, [recipients, search])
