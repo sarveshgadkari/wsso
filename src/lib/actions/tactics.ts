@@ -198,3 +198,38 @@ export async function logHours(
 
   revalidatePath(`/tactics/${tacticId}`)
 }
+
+/** Employee adds a work progress note without logging hours */
+export async function submitWorkUpdate(tacticId: string, notes: string) {
+  const profile = await requireProfile()
+  const trimmed = notes.trim()
+  if (!trimmed) throw new Error('Please describe what you worked on')
+
+  const supabase = await createClient()
+  const { data: tactic } = await supabase
+    .from('tactics')
+    .select('id, assigned_to, status')
+    .eq('id', tacticId)
+    .single()
+
+  if (!tactic) throw new Error('Work order not found or access denied')
+
+  if (profile.role === 'employee' && tactic.assigned_to !== profile.id) {
+    throw new Error('You can only update work orders assigned to you')
+  }
+
+  if (['done', 'archived'].includes(tactic.status)) {
+    throw new Error('This work order is already completed')
+  }
+
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:    tacticId,
+    employee_id:  profile.id,
+    action:       'Work update',
+    hours_logged: null,
+    notes:        trimmed,
+  })
+
+  revalidatePath(`/tactics/${tacticId}`)
+  revalidatePath('/activity-log')
+}

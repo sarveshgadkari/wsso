@@ -10,12 +10,15 @@ import { TacticDialog, type TacticRow, type EmployeeOption, type ProjectOption }
 import { TacticStatusButtons } from './TacticStatusButtons'
 import { HoursLogDialog } from './HoursLogDialog'
 import { ActivityTimeline, type ActivityLogRow } from './ActivityTimeline'
+import { WorkOrderWorkPanel } from './WorkOrderWorkPanel'
 import { STATUS_LABEL, STATUS_VARIANT, PRIORITY_LABEL, PRIORITY_VARIANT } from '@/lib/tactics-utils'
+import type { DocumentMeta } from '@/lib/actions/documents'
 import type { TacticStatus, TacticPriority, UserRole } from '@/lib/types'
 
 interface Props {
   tactic:        TacticRow
   logs:          ActivityLogRow[]
+  documents:     DocumentMeta[]
   employees:     EmployeeOption[]
   projects:      ProjectOption[]
   role:          UserRole
@@ -44,7 +47,7 @@ function MetaItem({
 }
 
 export function TacticDetail({
-  tactic: initialTactic, logs, employees, projects, role, canEdit, currentUserId,
+  tactic: initialTactic, logs, documents, employees, projects, role, canEdit, currentUserId,
 }: Props) {
   const router = useRouter()
   const [tactic,   setTactic]   = useState<TacticRow>(initialTactic)
@@ -153,6 +156,17 @@ export function TacticDetail({
           </MetaItem>
         </div>
       </div>
+
+      {/* Work updates, attachments, links */}
+      <WorkOrderWorkPanel
+        tacticId={tactic.id}
+        tacticCode={tactic.code}
+        status={status}
+        role={role}
+        currentUserId={currentUserId}
+        assignedTo={tactic.assigned_to}
+        initialDocuments={documents}
+      />
 
       {/* Activity timeline */}
       <div className="card p-6">

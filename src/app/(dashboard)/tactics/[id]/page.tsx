@@ -5,6 +5,7 @@ import { TacticDetail } from '@/components/tactics/TacticDetail'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 import type { ActivityLogRow } from '@/components/tactics/ActivityTimeline'
 import { enrichTacticRows, enrichActivityLogActors } from '@/lib/tactics/enrich-profiles'
+import { getDocuments } from '@/lib/actions/documents'
 
 interface Props {
   params: { id: string }
@@ -62,6 +63,7 @@ export default async function TacticDetailPage({ params }: Props) {
   const logs     = await enrichActivityLogActors(
     (logsRes.data ?? []) as unknown as ActivityLogRow[],
   )
+  const documents = await getDocuments({ tactic_code: tactic.code })
   const employees = (employeesRes.data ?? []) as { id: string; full_name: string; employee_code: string }[]
   const projects  = (projectsRes.data  ?? []) as { id: string; name: string; code: string }[]
 
@@ -77,6 +79,7 @@ export default async function TacticDetailPage({ params }: Props) {
     <TacticDetail
       tactic={tactic}
       logs={logs}
+      documents={documents}
       employees={employeeOptions}
       projects={projects}
       role={profile.role}

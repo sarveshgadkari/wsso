@@ -45,7 +45,7 @@ export default async function DocumentsPage() {
       <div>
         <h2 className="text-xl font-semibold text-neutral-900">Documents</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Files attached to tactics, projects, and clients. Upload to link a file to any entity.
+          Files and links attached to tactics, projects, and clients. Upload a file or paste a URL to attach to any entity.
         </p>
       </div>
 

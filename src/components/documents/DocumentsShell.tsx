@@ -3,13 +3,13 @@
 import { useState, useEffect, useTransition, useRef } from 'react'
 import {
   Upload, Download, Trash2, Search, File, FileText, FileImage,
-  X,
+  X, Link2, ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { useToast } from '@/lib/store/toast'
 import {
-  uploadDocument, getDocuments, deleteDocument, getDownloadUrl,
+  uploadDocument, addDocumentLink, getDocuments, deleteDocument, getDocumentOpenUrl,
 } from '@/lib/actions/documents'
 import type { DocumentMeta } from '@/lib/actions/documents'
 
@@ -28,7 +28,8 @@ function fmtDate(iso: string): string {
   })
 }
 
-function FileIcon({ type }: { type: string | null }) {
+function FileIcon({ type, isLink }: { type: string | null; isLink?: boolean }) {
+  if (isLink)                                              return <Link2 className="h-4 w-4 text-primary-500" />
   if (type?.startsWith('image/'))                        return <FileImage className="h-4 w-4 text-primary-400" />
   if (type === 'application/pdf' || type?.includes('document') || type?.includes('word'))
                                                          return <FileText className="h-4 w-4 text-red-400" />
@@ -50,42 +51,79 @@ interface UploadDialogProps {
 
 function UploadDialog({ open, onClose, onUploaded, tactics, projects, clients }: UploadDialogProps) {
   const toast = useToast()
+  const [mode,       setMode]       = useState<'file' | 'link'>('file')
   const [entityType, setEntityType] = useState<'tactic' | 'project' | 'client'>('tactic')
   const [entityId,   setEntityId]   = useState('')
   const [file,       setFile]       = useState<File | null>(null)
+  const [linkUrl,    setLinkUrl]    = useState('')
+  const [linkTitle,  setLinkTitle]  = useState('')
   const [loading,    setLoading]    = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const options = entityType === 'tactic' ? tactics : entityType === 'project' ? projects : clients
 
-  // Reset when reopened
   useEffect(() => {
-    if (open) { setEntityId(''); setFile(null); if (fileRef.current) fileRef.current.value = '' }
+    if (open) {
+      setEntityId('')
+      setFile(null)
+      setLinkUrl('')
+      setLinkTitle('')
+      setMode('file')
+      if (fileRef.current) fileRef.current.value = ''
+    }
   }, [open])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!file || !entityId) return
+    if (!entityId) return
     setLoading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('entity_type', entityType)
-      fd.append('entity_id', entityId)
-      const doc = await uploadDocument(fd)
-      onUploaded(doc as unknown as DocumentMeta)
-      toast.success('File uploaded successfully')
+      let doc: DocumentMeta
+      if (mode === 'file') {
+        if (!file) return
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('entity_type', entityType)
+        fd.append('entity_id', entityId)
+        doc = await uploadDocument(fd)
+      } else {
+        doc = await addDocumentLink({
+          url:         linkUrl,
+          title:       linkTitle || undefined,
+          entity_type: entityType,
+          entity_id:   entityId,
+        })
+      }
+      onUploaded(doc)
+      toast.success(mode === 'file' ? 'File uploaded' : 'Link added')
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
+      toast.error(err instanceof Error ? err.message : 'Failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Upload Document" size="md">
+    <Dialog open={open} onClose={onClose} title="Add Document" size="md">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex rounded border border-neutral-300 overflow-hidden">
+          {(['file', 'link'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`flex flex-1 items-center justify-center gap-1.5 py-1.5 text-sm transition-colors ${
+                mode === m
+                  ? 'bg-primary-600 text-white font-medium'
+                  : 'bg-white text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              {m === 'file' ? <Upload className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+              {m === 'file' ? 'Upload file' : 'Add link'}
+            </button>
+          ))}
+        </div>
         {/* Entity type */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Attach to</label>
@@ -130,27 +168,57 @@ function UploadDialog({ open, onClose, onUploaded, tactics, projects, clients }:
           )}
         </div>
 
-        {/* File input */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-neutral-700">File</label>
-          <input
-            ref={fileRef}
-            type="file"
-            required
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700
-                       file:mr-3 file:rounded file:border-0 file:bg-primary-50 file:px-3 file:py-1 file:text-xs
-                       file:font-medium file:text-primary-700 hover:file:bg-primary-100"
-          />
-          {file && (
-            <p className="text-xs text-neutral-500">{file.name} · {fmtSize(file.size)}</p>
-          )}
-        </div>
+        {/* File or link */}
+        {mode === 'file' ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-neutral-700">File</label>
+            <input
+              ref={fileRef}
+              type="file"
+              required
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700
+                         file:mr-3 file:rounded file:border-0 file:bg-primary-50 file:px-3 file:py-1 file:text-xs
+                         file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+            />
+            {file && (
+              <p className="text-xs text-neutral-500">{file.name} · {fmtSize(file.size)}</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-neutral-700">URL</label>
+              <input
+                type="url"
+                required
+                value={linkUrl}
+                onChange={e => setLinkUrl(e.target.value)}
+                placeholder="https://…"
+                className="h-9 w-full rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-neutral-700">Title (optional)</label>
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={e => setLinkTitle(e.target.value)}
+                placeholder="e.g. Design mockup, Google Doc…"
+                className="h-9 w-full rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          </>
+        )}
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button type="submit" loading={loading} disabled={!file || !entityId}>
-            <Upload className="h-4 w-4" /> Upload
+          <Button
+            type="submit"
+            loading={loading}
+            disabled={!entityId || (mode === 'file' ? !file : !linkUrl.trim())}
+          >
+            {mode === 'file' ? <><Upload className="h-4 w-4" /> Upload</> : <><Link2 className="h-4 w-4" /> Add link</>}
           </Button>
         </DialogFooter>
       </form>
@@ -208,13 +276,13 @@ export function DocumentsShell({
     setDocs(prev => [doc, ...prev])
   }
 
-  async function handleDownload(doc: DocumentMeta) {
+  async function handleOpen(doc: DocumentMeta) {
     setDownloading(doc.id)
     try {
-      const url = await getDownloadUrl(doc.file_path)
+      const url = await getDocumentOpenUrl(doc.id)
       window.open(url, '_blank', 'noopener')
     } catch {
-      toast.error('Could not generate download link')
+      toast.error('Could not open')
     } finally {
       setDownloading(null)
     }
@@ -268,7 +336,7 @@ export function DocumentsShell({
         </select>
 
         <Button onClick={() => setShowUpload(true)}>
-          <Upload className="h-4 w-4" /> Upload
+          <Upload className="h-4 w-4" /> Add
         </Button>
       </div>
 
@@ -279,7 +347,7 @@ export function DocumentsShell({
         ) : shown.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-neutral-400">
             <File className="h-8 w-8 text-neutral-300" />
-            {search || entityType ? 'No documents match your filters' : 'No documents yet — click Upload to add the first one'}
+            {search || entityType ? 'No documents match your filters' : 'No documents yet — click Add to upload a file or paste a link'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -297,16 +365,17 @@ export function DocumentsShell({
               <tbody className="divide-y divide-neutral-100">
                 {shown.map(doc => {
                   const canDelete = isAdmin || doc.uploaded_by === profileId
+                  const isLink = doc.source_type === 'link'
                   return (
                     <tr key={doc.id} className="hover:bg-neutral-50">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2.5">
-                          <FileIcon type={doc.file_type} />
+                          <FileIcon type={doc.file_type} isLink={isLink} />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-neutral-800 max-w-[220px]">{doc.file_name}</p>
-                            {doc.file_type && (
-                              <p className="text-xs text-neutral-400">{doc.file_type.split('/').pop()?.toUpperCase()}</p>
-                            )}
+                            <p className="text-xs text-neutral-400">
+                              {isLink ? 'Link' : doc.file_type?.split('/').pop()?.toUpperCase() ?? 'File'}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -322,7 +391,7 @@ export function DocumentsShell({
                         {(doc.uploader as { full_name: string } | null)?.full_name ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-right text-xs tabular-nums text-neutral-500">
-                        {fmtSize(doc.file_size)}
+                        {isLink ? '—' : fmtSize(doc.file_size)}
                       </td>
                       <td className="px-4 py-3 text-right text-xs text-neutral-400">
                         {fmtDate(doc.created_at)}
@@ -330,14 +399,16 @@ export function DocumentsShell({
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => handleDownload(doc)}
+                            onClick={() => handleOpen(doc)}
                             disabled={downloading === doc.id}
-                            aria-label="Download"
+                            aria-label={isLink ? 'Open link' : 'Download'}
                             className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-primary-600 disabled:opacity-50"
                           >
                             {downloading === doc.id
                               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-400 border-t-transparent" />
-                              : <Download className="h-4 w-4" />
+                              : isLink
+                                ? <ExternalLink className="h-4 w-4" />
+                                : <Download className="h-4 w-4" />
                             }
                           </button>
                           {canDelete && (

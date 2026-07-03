@@ -516,9 +516,11 @@ export type Database = {
         Row: {
           id: string
           file_name: string
-          file_path: string
+          file_path: string | null
           file_type: string | null
           file_size: number | null
+          source_type: string
+          external_url: string | null
           company_code: string | null
           employee_code: string | null
           client_code: string | null
@@ -530,9 +532,11 @@ export type Database = {
         Insert: {
           id?: string
           file_name: string
-          file_path: string
+          file_path?: string | null
           file_type?: string | null
           file_size?: number | null
+          source_type?: string
+          external_url?: string | null
           company_code?: string | null
           employee_code?: string | null
           client_code?: string | null
@@ -544,9 +548,11 @@ export type Database = {
         Update: {
           id?: string
           file_name?: string
-          file_path?: string
+          file_path?: string | null
           file_type?: string | null
           file_size?: number | null
+          source_type?: string
+          external_url?: string | null
           company_code?: string | null
           employee_code?: string | null
           client_code?: string | null
