@@ -17,6 +17,7 @@ export type TimeLog          = Tables['time_logs']['Row']
 export type Document         = Tables['documents']['Row']
 export type Notification     = Tables['notifications']['Row']
 export type TacticDocument   = Tables['tactic_documents']['Row']
+export type EmployeeWorkSheet = Tables['employee_work_sheets']['Row']
 export type TacticTask       = Tables['tactic_tasks']['Row']
 export type TacticNextStep   = Tables['tactic_next_steps']['Row']
 

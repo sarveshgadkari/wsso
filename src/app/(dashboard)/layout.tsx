@@ -1,6 +1,5 @@
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
-import { recordLoginClockIn } from '@/lib/actions/time'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { ToastContainer } from '@/components/ui/Toast'
@@ -8,15 +7,6 @@ import { ToastContainer } from '@/components/ui/Toast'
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Redirect to /login if no valid session
   const profile = await requireProfile()
-
-  // Employees: first visit each local day auto-starts today's time log at login time
-  if (profile.role === 'employee') {
-    try {
-      await recordLoginClockIn()
-    } catch {
-      // Non-fatal — manual clock-in still available if no row exists
-    }
-  }
 
   // Fetch unread notification count
   const supabase = await createClient()

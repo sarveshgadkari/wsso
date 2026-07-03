@@ -68,7 +68,6 @@ export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn }: Pr
 
   const active = !!activeSession
   const tzLabel = timezoneShortLabel(timeZone)
-  const loginSource = activeSession?.clock_in_source === 'login'
 
   if (dayComplete && session) {
     return (
@@ -125,12 +124,11 @@ export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn }: Pr
                 </p>
                 <p className="text-xs text-neutral-400">
                   Since {formatTimeInTimezone(timeZone, new Date(activeSession!.clock_in_at))} {tzLabel}
-                  {loginSource ? ' · started at login' : ''}
                 </p>
               </>
             ) : (
               <p className="text-xs text-neutral-400">
-                Sign-in starts today&apos;s session automatically ({tzLabel}). Manual clock-in if needed.
+                Click Clock In when you start work ({tzLabel}). One session per day.
               </p>
             )}
           </div>

@@ -3,6 +3,14 @@
 //   npx supabase gen types typescript --project-id <ref> --schema public \
 //     > src/lib/types/database.ts
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
 export type Database = {
   public: {
     Tables: {
@@ -402,6 +410,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'time_logs_employee_id_fkey'
+            columns: ['employee_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      employee_work_sheets: {
+        Row: {
+          id:              string
+          employee_id:     string
+          name:            string
+          sheet_type:      string
+          columns:         string[]
+          rows:            Json
+          blocks:          Json
+          source_filename: string | null
+          created_at:      string
+          updated_at:      string
+        }
+        Insert: {
+          id?:              string
+          employee_id:      string
+          name:             string
+          sheet_type?:      string
+          columns?:         string[]
+          rows?:            Json
+          blocks?:          Json
+          source_filename?: string | null
+          created_at?:      string
+          updated_at?:      string
+        }
+        Update: {
+          id?:              string
+          employee_id?:     string
+          name?:            string
+          sheet_type?:      string
+          columns?:         string[]
+          rows?:            Json
+          blocks?:          Json
+          source_filename?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'employee_work_sheets_employee_id_fkey'
             columns: ['employee_id']
             referencedRelation: 'profiles'
             referencedColumns: ['id']

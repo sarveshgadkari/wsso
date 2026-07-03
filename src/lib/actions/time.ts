@@ -101,39 +101,6 @@ export async function closeStaleSessionsForEmployees(
   return stale.length
 }
 
-// ── Login clock-in (once per local day) ───────────────────────────────────────
-// First app sign-in of the employee's local day creates today's time log.
-// clock_in_at = login timestamp; employee still must clock out manually.
-
-export async function recordLoginClockIn(): Promise<{ ok: boolean; error?: string }> {
-  const profile  = await requireProfile()
-  if (profile.role !== 'employee') return { ok: true }
-
-  const tz       = resolveTimezone(profile.timezone)
-  const supabase = await createClient()
-
-  const { data: todayLog } = await getTodayLog(profile.id, tz, supabase)
-  if (todayLog) return { ok: true }
-
-  await closeStaleOpenSession(profile.id, tz, supabase)
-
-  const { error } = await supabase
-    .from('time_logs')
-    .insert({
-      employee_id:     profile.id,
-      clock_in_source: 'login',
-    })
-
-  if (error) {
-    // Unique index race — another request won
-    if (error.code === '23505') return { ok: true }
-    return { ok: false, error: error.message }
-  }
-
-  revalidateTimePaths()
-  return { ok: true }
-}
-
 // ── Clock In (manual — once per local day) ──────────────────────────────────────
 
 export async function clockIn() {

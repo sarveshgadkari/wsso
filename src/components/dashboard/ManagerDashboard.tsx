@@ -3,6 +3,7 @@ import { Users, ListTodo, Loader, AlertCircle, Clock, ChevronRight, FileText } f
 import { createClient } from '@/lib/supabase/server'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
+import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { getProfile } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import {
@@ -176,6 +177,8 @@ export async function ManagerDashboard() {
           icon={FileText}
         />
       </div>
+
+      <MyWorkDashboardCard />
 
       {/* Review queue + hours chart */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

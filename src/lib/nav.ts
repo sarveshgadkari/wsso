@@ -14,6 +14,7 @@ import {
   Activity,
   Bell,
   Settings,
+  Table2,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -41,6 +42,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Work',
     items: [
+      { label: 'My Work',      href: '/my-work', icon: Table2 },
       { label: 'TACTICs',      href: '/tactic-documents', icon: FileText },
       { label: 'Work Orders',  href: '/tactics', icon: ClipboardList },
       { label: 'Kanban Board', href: '/kanban',  icon: Kanban },
@@ -81,6 +83,7 @@ export const NAV_SECTIONS: NavSection[] = [
 /** All paths that require authentication (used by middleware) */
 export const DASHBOARD_PATHS = [
   '/dashboard',
+  '/my-work',
   '/tactics',
   '/kanban',
   '/employees',
