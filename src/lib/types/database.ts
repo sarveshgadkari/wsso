@@ -327,6 +327,56 @@ export type Database = {
         ]
       }
 
+      announcements: {
+        Row: {
+          id: string
+          created_by: string
+          title: string
+          body: string
+          status: string
+          recipient_ids: string[]
+          send_email: boolean
+          email_sent_at: string | null
+          published_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          created_by: string
+          title: string
+          body: string
+          status?: string
+          recipient_ids?: string[]
+          send_email?: boolean
+          email_sent_at?: string | null
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          created_by?: string
+          title?: string
+          body?: string
+          status?: string
+          recipient_ids?: string[]
+          send_email?: boolean
+          email_sent_at?: string | null
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'announcements_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       activity_logs: {
         Row: {
           id: string

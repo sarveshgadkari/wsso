@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
+import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
 import { getProfile } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import {
@@ -179,6 +180,8 @@ export async function ManagerDashboard() {
       </div>
 
       <MyWorkDashboardCard />
+
+      <AnnouncementsDashboardCard />
 
       {/* Review queue + hours chart */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

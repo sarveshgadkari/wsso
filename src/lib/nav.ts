@@ -15,6 +15,7 @@ import {
   Bell,
   Settings,
   Table2,
+  Megaphone,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -67,9 +68,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Content',
     items: [
-      { label: 'Documents',    href: '/documents',    icon: FileText },
-      { label: 'Reports',      href: '/reports',      icon: BarChart3,  roles: ['admin', 'manager'] },
-      { label: 'Activity Log', href: '/activity-log', icon: Activity },
+      { label: 'Documents',      href: '/documents',      icon: FileText },
+      { label: 'Announcements',  href: '/announcements',  icon: Megaphone },
+      { label: 'Reports',        href: '/reports',        icon: BarChart3,  roles: ['admin', 'manager'] },
+      { label: 'Activity Log',   href: '/activity-log',   icon: Activity },
     ],
   },
   {
@@ -94,6 +96,7 @@ export const DASHBOARD_PATHS = [
   '/documents',
   '/reports',
   '/activity-log',
+  '/announcements',
   '/notifications',
   '/settings',
 ]

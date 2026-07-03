@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  CheckCheck, ClipboardList, Activity, UserCheck, Bell,
+  CheckCheck, ClipboardList, Activity, UserCheck, Bell, Megaphone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { markRead, markAllRead } from '@/lib/actions/notifications'
@@ -22,6 +22,7 @@ function timeAgo(iso: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
+  if (type === 'announcement')   return <Megaphone className="h-4 w-4 text-amber-500" />
   if (type === 'tactic_assigned') return <UserCheck className="h-4 w-4 text-primary-500" />
   if (type === 'tactic_review')   return <ClipboardList className="h-4 w-4 text-warning-500" />
   return <Activity className="h-4 w-4 text-neutral-400" />

@@ -21,6 +21,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/documents',          'Documents'],
   ['/reports',            'Reports'],
   ['/activity-log',       'Activity Log'],
+  ['/announcements',      'Announcements'],
   ['/notifications',      'Notifications'],
   ['/settings/hierarchy', 'Admin Settings'],
 ]

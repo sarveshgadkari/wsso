@@ -8,6 +8,7 @@ import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
+import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
 import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel, todayInTimezone } from '@/lib/utils/dates'
 import { getProfile } from '@/lib/auth/session'
@@ -151,6 +152,8 @@ export async function AdminDashboard() {
       </div>
 
       <MyWorkDashboardCard />
+
+      <AnnouncementsDashboardCard />
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, CheckCheck, ChevronRight, ClipboardList, Activity, UserCheck } from 'lucide-react'
+import { Bell, CheckCheck, ChevronRight, ClipboardList, Activity, UserCheck, Megaphone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getNotifications, markRead, markAllRead } from '@/lib/actions/notifications'
 import type { Notification } from '@/lib/types'
@@ -18,6 +18,7 @@ function timeAgo(iso: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
+  if (type === 'announcement')   return <Megaphone className="h-4 w-4 text-amber-500" />
   if (type === 'tactic_assigned') return <UserCheck className="h-4 w-4 text-primary-500" />
   if (type === 'tactic_review')   return <ClipboardList className="h-4 w-4 text-warning-500" />
   return <Activity className="h-4 w-4 text-neutral-400" />
