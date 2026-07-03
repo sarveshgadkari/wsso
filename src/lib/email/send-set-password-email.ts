@@ -1,8 +1,8 @@
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { appBaseUrl } from '@/lib/auth/set-password-link'
 
-const DEFAULT_FROM = 'onboarding@resend.dev'
+const DEFAULT_FROM = 'TLB Enterprise <support@tlbisbig.world>'
 
 export interface SetPasswordEmailParams {
   email:         string
@@ -14,7 +14,7 @@ export interface SetPasswordEmailParams {
 
 export interface SetPasswordEmailResult {
   sent:   boolean
-  method: 'resend' | 'supabase' | 'none'
+  method: 'brevo' | 'supabase' | 'none'
   error?: string
 }
 
@@ -46,28 +46,48 @@ function welcomeHtml(params: SetPasswordEmailParams, link: string): string {
   `.trim()
 }
 
-async function sendViaResend(
+function brevoConfigured(): boolean {
+  return !!(process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASSWORD)
+}
+
+async function sendViaBrevo(
   params: SetPasswordEmailParams,
   link: string,
 ): Promise<SetPasswordEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) return { sent: false, method: 'none', error: 'RESEND_API_KEY not configured' }
-
-  const resend = new Resend(apiKey)
-  const from   = process.env.EMAIL_FROM ?? DEFAULT_FROM
-
-  const { error } = await resend.emails.send({
-    from,
-    to:      params.email,
-    subject: 'Set up your WSSO account',
-    html:    welcomeHtml(params, link),
-  })
-
-  if (error) {
-    return { sent: false, method: 'resend', error: error.message }
+  if (!brevoConfigured()) {
+    return {
+      sent:   false,
+      method: 'none',
+      error:  'BREVO_SMTP_USER and BREVO_SMTP_PASSWORD not configured',
+    }
   }
 
-  return { sent: true, method: 'resend' }
+  const host = process.env.BREVO_SMTP_HOST ?? 'smtp-relay.brevo.com'
+  const port = Number(process.env.BREVO_SMTP_PORT ?? '587')
+  const from = process.env.EMAIL_FROM ?? DEFAULT_FROM
+
+  const transport = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: {
+      user: process.env.BREVO_SMTP_USER,
+      pass: process.env.BREVO_SMTP_PASSWORD,
+    },
+  })
+
+  try {
+    await transport.sendMail({
+      from,
+      to:      params.email,
+      subject: 'Set up your WSSO account',
+      html:    welcomeHtml(params, link),
+    })
+    return { sent: true, method: 'brevo' }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Brevo SMTP send failed'
+    return { sent: false, method: 'brevo', error: message }
+  }
 }
 
 async function sendViaSupabase(params: SetPasswordEmailParams): Promise<SetPasswordEmailResult> {
@@ -86,25 +106,25 @@ async function sendViaSupabase(params: SetPasswordEmailParams): Promise<SetPassw
   return { sent: true, method: 'supabase' }
 }
 
-/** Sends the new employee a set-password email via Resend (preferred) or Supabase Auth. */
+/**
+ * Sends the new employee a set-password email via Brevo SMTP.
+ * When a link was already generated (admin create-user), only Brevo is used —
+ * do not call Supabase resetPasswordForEmail or it hits the 60s rate limit.
+ */
 export async function sendSetPasswordEmail(
   params: SetPasswordEmailParams,
 ): Promise<SetPasswordEmailResult> {
   const link = params.setPasswordLink
 
-  if (process.env.RESEND_API_KEY) {
-    if (!link) {
-      return { sent: false, method: 'none', error: 'Set-password link could not be generated' }
+  if (link) {
+    if (!brevoConfigured()) {
+      return {
+        sent:   false,
+        method: 'none',
+        error:  'Brevo SMTP not configured — add BREVO_SMTP_USER and BREVO_SMTP_PASSWORD in Vercel',
+      }
     }
-    const resendResult = await sendViaResend(params, link)
-    if (resendResult.sent) return resendResult
-    const supabaseResult = await sendViaSupabase(params)
-    if (supabaseResult.sent) return supabaseResult
-    return {
-      sent:   false,
-      method: 'none',
-      error:  supabaseResult.error ?? resendResult.error,
-    }
+    return sendViaBrevo(params, link)
   }
 
   return sendViaSupabase(params)

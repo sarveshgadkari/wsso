@@ -38,9 +38,11 @@ interface Props {
 }
 
 interface SuccessState {
-  employee_code: string
-  full_name:     string
-  email_sent:    boolean
+  employee_code:     string
+  full_name:         string
+  email_sent:        boolean
+  set_password_link: string | null
+  email_error:       string | null
 }
 
 export function CreateEmployeeDialog({
@@ -108,9 +110,11 @@ export function CreateEmployeeDialog({
     }
 
     setSuccess({
-      employee_code: body.profile.employee_code,
-      full_name:     body.profile.full_name,
-      email_sent:    body.email_sent === true,
+      employee_code:     body.profile.employee_code,
+      full_name:         body.profile.full_name,
+      email_sent:        body.email_sent === true,
+      set_password_link: body.set_password_link ?? null,
+      email_error:       body.email_error ?? null,
     })
     onCreated(body.profile)
     toast.success(
@@ -142,8 +146,19 @@ export function CreateEmployeeDialog({
           <p className="text-xs text-neutral-400">
             {success.email_sent
               ? 'A set-password email was sent to the employee. They must use that link before signing in.'
-              : 'The account was created, but the welcome email could not be sent. Ask your admin to check email settings or resend the invite.'}
+              : 'The account was created, but the welcome email could not be sent. Copy the link below and send it to the employee manually.'}
           </p>
+          {!success.email_sent && success.set_password_link && (
+            <div className="w-full rounded-md border border-neutral-200 bg-neutral-50 p-3 text-left">
+              <p className="text-xs font-medium text-neutral-600">Set-password link</p>
+              <p className="mt-1 break-all font-mono text-xs text-neutral-800">
+                {success.set_password_link}
+              </p>
+              {success.email_error && (
+                <p className="mt-2 text-xs text-danger-600">{success.email_error}</p>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         /* ── Form ── */
