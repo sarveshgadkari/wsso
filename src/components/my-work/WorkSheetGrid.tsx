@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useTransition } from 'react'
+import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Plus, Trash2, Save, ExternalLink,
@@ -33,6 +33,10 @@ function newRow(columns: string[]): WorkSheetRow {
 
 const WRAP_PREF_KEY = 'wsso:my-work:wrap-text'
 
+const MIN_COL_WIDTH     = 60
+const MAX_COL_WIDTH     = 900
+const DEFAULT_COL_WIDTH = 160
+
 function autoSize(el: HTMLTextAreaElement | null) {
   if (!el) return
   el.style.height = 'auto'
@@ -49,8 +53,9 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
   const [wrapText, setWrapText] = useState(false)
 
   // Load the saved preference after mount to avoid SSR hydration mismatch.
+  // Wrapping defaults to on unless the user explicitly turned it off.
   useEffect(() => {
-    setWrapText(localStorage.getItem(WRAP_PREF_KEY) === '1')
+    setWrapText(localStorage.getItem(WRAP_PREF_KEY) !== '0')
   }, [])
 
   const toggleWrap = () => {
@@ -60,6 +65,54 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
       return next
     })
   }
+
+  // Column widths, resizable by dragging header edges (persisted per sheet).
+  const widthsKey = `wsso:my-work:col-widths:${sheet.id}`
+  const [colWidths, setColWidths] = useState<Record<string, number>>({})
+  const colWidthsRef = useRef(colWidths)
+  colWidthsRef.current = colWidths
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(widthsKey)
+      if (raw) setColWidths(JSON.parse(raw))
+    } catch { /* corrupt pref — ignore and use defaults */ }
+  }, [widthsKey])
+
+  const startResize = (col: string, e: React.PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = colWidthsRef.current[col] ?? DEFAULT_COL_WIDTH
+    const clamp = (x: number) => Math.max(MIN_COL_WIDTH, Math.min(MAX_COL_WIDTH, x))
+    document.body.style.cursor = 'col-resize'
+
+    const onMove = (ev: PointerEvent) => {
+      const w = clamp(startW + ev.clientX - startX)
+      setColWidths(prev => ({ ...prev, [col]: w }))
+    }
+    const onUp = (ev: PointerEvent) => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      const next = { ...colWidthsRef.current, [col]: clamp(startW + ev.clientX - startX) }
+      setColWidths(next)
+      localStorage.setItem(widthsKey, JSON.stringify(next))
+    }
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }
+
+  const colStyle = (col: string) => {
+    const w = colWidths[col]
+    return w ? { width: w, minWidth: w, maxWidth: w } : undefined
+  }
+
+  // Re-fit wrapped cell heights whenever column widths change (live during drag).
+  const tableRef = useRef<HTMLTableElement>(null)
+  useEffect(() => {
+    if (!wrapText) return
+    tableRef.current?.querySelectorAll('textarea').forEach(autoSize)
+  }, [colWidths, wrapText])
 
   const markDirty = useCallback(() => setDirty(true), [])
 
@@ -188,39 +241,59 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
       </div>
 
       <div className="card overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table ref={tableRef} className="min-w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-50">
+            <tr>
+              <th className="w-10 border border-neutral-300 bg-neutral-100 px-2 py-1.5 text-center text-xs font-semibold text-neutral-400 select-none">
+                #
+              </th>
               {columns.map(col => (
-                <th key={col} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                <th
+                  key={col}
+                  style={colStyle(col)}
+                  className={cn(
+                    'relative border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-left text-xs font-semibold text-neutral-600',
+                    !colWidths[col] && 'min-w-[140px]',
+                  )}
+                >
                   {col}
+                  <div
+                    onPointerDown={e => startResize(col, e)}
+                    className="absolute -right-[3px] top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-primary-400/70 active:bg-primary-500"
+                    title="Drag to resize column"
+                  />
                 </th>
               ))}
-              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              <th className="border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-left text-xs font-semibold text-neutral-600">
                 Work order
               </th>
-              <th className="w-24 px-3 py-2" />
+              <th className="w-24 border border-neutral-300 bg-neutral-100 px-3 py-1.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 2} className="px-5 py-8 text-center text-neutral-400">
+                <td colSpan={columns.length + 3} className="border border-neutral-300 px-5 py-8 text-center text-neutral-400">
                   No rows yet — click <strong>Add Row</strong> or edit cells after import.
                 </td>
               </tr>
-            ) : rows.map(row => {
+            ) : rows.map((row, rowIdx) => {
               const linked = linkedTactic(row.tactic_id)
               return (
-                <tr key={row.id} className="hover:bg-neutral-50/80">
+                <tr key={row.id}>
+                  <td className="border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none">
+                    {rowIdx + 1}
+                  </td>
                   {columns.map(col => (
-                    <td key={col} className={cn('p-1', wrapText && 'align-top')}>
+                    <td key={col} style={colStyle(col)} className="border border-neutral-300 p-0 align-top">
                       {wrapText ? (
                         <textarea
-                          key={`${col}-wrap`}
                           ref={autoSize}
                           rows={1}
-                          className="block w-full min-w-[120px] max-w-[360px] resize-none overflow-hidden whitespace-pre-wrap break-words rounded border border-transparent bg-transparent px-2 py-1.5 text-sm leading-snug focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-200"
+                          className={cn(
+                            'block w-full resize-none overflow-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-2.5 py-1.5 text-sm leading-snug focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
+                            !colWidths[col] && 'min-w-[140px] max-w-[420px]',
+                          )}
                           value={row.cells[col] ?? ''}
                           onChange={e => {
                             updateCell(row.id, col, e.target.value)
@@ -229,14 +302,17 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
                         />
                       ) : (
                         <input
-                          className="w-full min-w-[120px] rounded border border-transparent bg-transparent px-2 py-1.5 text-sm focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-200"
+                          className={cn(
+                            'block w-full border-0 bg-transparent px-2.5 py-1.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
+                            !colWidths[col] && 'min-w-[140px]',
+                          )}
                           value={row.cells[col] ?? ''}
                           onChange={e => updateCell(row.id, col, e.target.value)}
                         />
                       )}
                     </td>
                   ))}
-                  <td className="p-2 align-top">
+                  <td className="border border-neutral-300 p-2 align-top">
                     <div className="flex min-w-[160px] flex-col gap-1">
                       {linked ? (
                         <Link
@@ -262,7 +338,7 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
                       </select>
                     </div>
                   </td>
-                  <td className="p-2 align-top">
+                  <td className="border border-neutral-300 p-2 align-top">
                     <div className="flex flex-col gap-1">
                       <Button
                         variant="ghost"
