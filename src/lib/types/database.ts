@@ -512,6 +512,52 @@ export type Database = {
         ]
       }
 
+      employee_work_sheet_shares: {
+        Row: {
+          id:          string
+          sheet_id:    string
+          shared_with: string
+          can_edit:    boolean
+          created_by:  string
+          created_at:  string
+        }
+        Insert: {
+          id?:          string
+          sheet_id:     string
+          shared_with:  string
+          can_edit?:    boolean
+          created_by:   string
+          created_at?:  string
+        }
+        Update: {
+          id?:          string
+          sheet_id?:    string
+          shared_with?: string
+          can_edit?:    boolean
+          created_by?:  string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'employee_work_sheet_shares_sheet_id_fkey'
+            columns: ['sheet_id']
+            referencedRelation: 'employee_work_sheets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'employee_work_sheet_shares_shared_with_fkey'
+            columns: ['shared_with']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'employee_work_sheet_shares_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       documents: {
         Row: {
           id: string

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import {
-  Plus, Upload, Table2, FileSpreadsheet, FileText, LayoutTemplate,
+  Plus, Upload, Table2, FileSpreadsheet, FileText, LayoutTemplate, Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
@@ -15,22 +16,59 @@ import {
 } from '@/lib/actions/my-work'
 import { WorkSheetGrid } from './WorkSheetGrid'
 import { WorkDocumentEditor } from './WorkDocumentEditor'
-import type { WorkSheet, WorkOrderOption } from '@/lib/my-work/types'
+import type { WorkSheetWithAccess, WorkOrderOption } from '@/lib/my-work/types'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  initialSheets: WorkSheet[]
+  initialSheets: WorkSheetWithAccess[]
   workOrders:    WorkOrderOption[]
 }
 
-function SheetIcon({ sheet }: { sheet: WorkSheet }) {
+function SheetIcon({ sheet }: { sheet: WorkSheetWithAccess }) {
   if (sheet.sheet_type === 'document') {
     return <FileText className="h-4 w-4 shrink-0 opacity-60" />
   }
   return <FileSpreadsheet className="h-4 w-4 shrink-0 opacity-60" />
 }
 
+function SheetListItem({
+  sheet,
+  selected,
+  onSelect,
+}: {
+  sheet: WorkSheetWithAccess
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+        selected
+          ? 'bg-primary-50 font-medium text-primary-800'
+          : 'text-neutral-700 hover:bg-neutral-50',
+      )}
+    >
+      <SheetIcon sheet={sheet} />
+      <span className="min-w-0 flex-1 truncate">{sheet.name}</span>
+      {!sheet.access.isOwner && (
+        <span title="Shared with you">
+          <Users className="h-3 w-3 shrink-0 text-primary-400" />
+        </span>
+      )}
+      {sheet.access.isOwner && (sheet.access.shareCount ?? 0) > 0 && (
+        <span className="shrink-0 rounded-full bg-primary-100 px-1.5 text-[10px] font-medium text-primary-700">
+          {sheet.access.shareCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
 export function MyWorkShell({ initialSheets, workOrders }: Props) {
+  const router = useRouter()
   const toast = useToast()
   const [sheets, setSheets]         = useState(initialSheets)
   const [selectedId, setSelectedId] = useState(initialSheets[0]?.id ?? '')
@@ -44,6 +82,20 @@ export function MyWorkShell({ initialSheets, workOrders }: Props) {
 
   const selected = sheets.find(s => s.id === selectedId) ?? sheets[0]
 
+  const ownedSheets  = sheets.filter(s => s.access.isOwner)
+  const sharedSheets = sheets.filter(s => !s.access.isOwner)
+
+  const refreshShares = () => {
+    router.refresh()
+    start(async () => {
+      try {
+        const { listMyWorkSheets } = await import('@/lib/actions/my-work')
+        const updated = await listMyWorkSheets()
+        setSheets(updated)
+      } catch { /* page refresh will reconcile */ }
+    })
+  }
+
   const handleUpload = () => {
     if (!file) return
     const fd = new FormData()
@@ -53,8 +105,12 @@ export function MyWorkShell({ initialSheets, workOrders }: Props) {
     start(async () => {
       try {
         const sheet = await uploadWorkSheetExcel(fd)
-        setSheets(prev => [sheet, ...prev])
-        setSelectedId(sheet.id)
+        const withAccess: WorkSheetWithAccess = {
+          ...sheet,
+          access: { isOwner: true, canEdit: true, shareCount: 0 },
+        }
+        setSheets(prev => [withAccess, ...prev])
+        setSelectedId(withAccess.id)
         setUploadOpen(false)
         setFile(null)
         setSheetName('')
@@ -70,8 +126,12 @@ export function MyWorkShell({ initialSheets, workOrders }: Props) {
     start(async () => {
       try {
         const sheet = await createBlankWorkSheet(sheetName.trim() || 'My spreadsheet')
-        setSheets(prev => [sheet, ...prev])
-        setSelectedId(sheet.id)
+        const withAccess: WorkSheetWithAccess = {
+          ...sheet,
+          access: { isOwner: true, canEdit: true, shareCount: 0 },
+        }
+        setSheets(prev => [withAccess, ...prev])
+        setSelectedId(withAccess.id)
         setGridOpen(false)
         setSheetName('')
         toast.success('Spreadsheet created')
@@ -85,8 +145,12 @@ export function MyWorkShell({ initialSheets, workOrders }: Props) {
     start(async () => {
       try {
         const sheet = await createDocumentWorkSheet(sheetName.trim() || 'Untitled page')
-        setSheets(prev => [sheet, ...prev])
-        setSelectedId(sheet.id)
+        const withAccess: WorkSheetWithAccess = {
+          ...sheet,
+          access: { isOwner: true, canEdit: true, shareCount: 0 },
+        }
+        setSheets(prev => [withAccess, ...prev])
+        setSelectedId(withAccess.id)
         setDocOpen(false)
         setSheetName('')
         toast.success('Page created')
@@ -112,26 +176,36 @@ export function MyWorkShell({ initialSheets, workOrders }: Props) {
             My work
           </p>
           <ul className="flex flex-col gap-0.5">
-            {sheets.map(s => (
+            {ownedSheets.map(s => (
               <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(s.id)}
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
-                    selected?.id === s.id
-                      ? 'bg-primary-50 font-medium text-primary-800'
-                      : 'text-neutral-700 hover:bg-neutral-50',
-                  )}
-                >
-                  <SheetIcon sheet={s} />
-                  <span className="truncate">{s.name}</span>
-                </button>
+                <SheetListItem
+                  sheet={s}
+                  selected={selected?.id === s.id}
+                  onSelect={() => setSelectedId(s.id)}
+                />
               </li>
             ))}
           </ul>
-          {sheets.length === 0 && (
+          {ownedSheets.length === 0 && sharedSheets.length === 0 && (
             <p className="px-2 py-3 text-xs text-neutral-400">Nothing here yet</p>
+          )}
+          {sharedSheets.length > 0 && (
+            <>
+              <p className="mb-2 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                Shared with me
+              </p>
+              <ul className="flex flex-col gap-0.5">
+                {sharedSheets.map(s => (
+                  <li key={s.id}>
+                    <SheetListItem
+                      sheet={s}
+                      selected={selected?.id === s.id}
+                      onSelect={() => setSelectedId(s.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           <div className="mt-3 flex flex-col gap-2 border-t border-neutral-100 pt-3">
             <Button
@@ -168,20 +242,28 @@ export function MyWorkShell({ initialSheets, workOrders }: Props) {
             <WorkDocumentEditor
               key={selected.id}
               sheet={selected}
+              access={selected.access}
               onSheetChange={updated => {
-                setSheets(prev => prev.map(s => s.id === updated.id ? updated : s))
+                setSheets(prev => prev.map(s =>
+                  s.id === updated.id ? { ...s, ...updated } : s,
+                ))
               }}
               onSheetDelete={onSheetDelete}
+              onShareChange={refreshShares}
             />
           ) : (
             <WorkSheetGrid
               key={selected.id}
               sheet={selected}
+              access={selected.access}
               workOrders={workOrders}
               onSheetChange={updated => {
-                setSheets(prev => prev.map(s => s.id === updated.id ? updated : s))
+                setSheets(prev => prev.map(s =>
+                  s.id === updated.id ? { ...s, ...updated } : s,
+                ))
               }}
               onSheetDelete={onSheetDelete}
+              onShareChange={refreshShares}
             />
           )
         ) : (

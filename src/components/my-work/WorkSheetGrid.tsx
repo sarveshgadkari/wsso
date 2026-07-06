@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Plus, Trash2, Save, ExternalLink,
-  ClipboardPlus, Link2, WrapText,
+  ClipboardPlus, Link2, WrapText, Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -16,13 +16,16 @@ import {
   createWorkOrderFromRow,
   linkRowToWorkOrder,
 } from '@/lib/actions/my-work'
-import type { WorkSheet, WorkSheetRow, WorkOrderOption } from '@/lib/my-work/types'
+import type { WorkSheet, WorkSheetRow, WorkOrderOption, WorkSheetAccess } from '@/lib/my-work/types'
+import { WorkSheetShareDialog } from './WorkSheetShareDialog'
 
 interface Props {
   sheet:       WorkSheet
+  access:      WorkSheetAccess
   workOrders:    WorkOrderOption[]
   onSheetChange: (sheet: WorkSheet) => void
   onSheetDelete: (id: string) => void
+  onShareChange: () => void
 }
 
 function newRow(columns: string[]): WorkSheetRow {
@@ -43,13 +46,15 @@ function autoSize(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`
 }
 
-export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete }: Props) {
+export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onSheetDelete, onShareChange }: Props) {
   const toast = useToast()
+  const canEdit = access.canEdit
   const [columns, setColumns] = useState(sheet.columns)
   const [rows, setRows]       = useState<WorkSheetRow[]>(sheet.rows)
   const [dirty, setDirty]     = useState(false)
   const [isPending, start]    = useTransition()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [wrapText, setWrapText] = useState(false)
 
   // Load the saved preference after mount to avoid SSR hydration mismatch.
@@ -214,29 +219,58 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
           {sheet.source_filename && (
             <p className="text-xs text-neutral-400">Imported from {sheet.source_filename}</p>
           )}
+          {!access.isOwner && access.ownerName && (
+            <p className="mt-0.5 text-xs text-primary-600">
+              Shared by {access.ownerName}
+              {!canEdit && ' · View only'}
+              {canEdit && ' · You can edit'}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={toggleWrap}
-            className={cn(wrapText && 'border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100')}
-            title={wrapText ? 'Show each cell on a single line' : 'Wrap long text inside cells (like Excel)'}
-          >
-            <WrapText className="h-3.5 w-3.5" /> Wrap
-          </Button>
-          <Button variant="secondary" size="sm" onClick={addColumn} disabled={isPending}>
-            <Plus className="h-3.5 w-3.5" /> Column
-          </Button>
-          <Button variant="secondary" size="sm" onClick={addRow} disabled={isPending}>
-            <Plus className="h-3.5 w-3.5" /> Row
-          </Button>
-          <Button size="sm" onClick={save} loading={isPending} disabled={!dirty}>
-            <Save className="h-3.5 w-3.5" /> Save
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {access.isOwner && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShareOpen(true)}
+              title="Share with manager or admin"
+            >
+              <Users className="h-3.5 w-3.5" />
+              Share
+              {(access.shareCount ?? 0) > 0 && (
+                <span className="rounded-full bg-primary-100 px-1.5 text-xs text-primary-700">
+                  {access.shareCount}
+                </span>
+              )}
+            </Button>
+          )}
+          {canEdit && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={toggleWrap}
+                className={cn(wrapText && 'border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100')}
+                title={wrapText ? 'Show each cell on a single line' : 'Wrap long text inside cells (like Excel)'}
+              >
+                <WrapText className="h-3.5 w-3.5" /> Wrap
+              </Button>
+              <Button variant="secondary" size="sm" onClick={addColumn} disabled={isPending}>
+                <Plus className="h-3.5 w-3.5" /> Column
+              </Button>
+              <Button variant="secondary" size="sm" onClick={addRow} disabled={isPending}>
+                <Plus className="h-3.5 w-3.5" /> Row
+              </Button>
+              <Button size="sm" onClick={save} loading={isPending} disabled={!dirty}>
+                <Save className="h-3.5 w-3.5" /> Save
+              </Button>
+            </>
+          )}
+          {access.isOwner && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -290,9 +324,11 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
                         <textarea
                           ref={autoSize}
                           rows={1}
+                          readOnly={!canEdit}
                           className={cn(
                             'block w-full resize-none overflow-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-2.5 py-1.5 text-sm leading-snug focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
                             !colWidths[col] && 'min-w-[140px] max-w-[420px]',
+                            !canEdit && 'cursor-default',
                           )}
                           value={row.cells[col] ?? ''}
                           onChange={e => {
@@ -302,9 +338,11 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
                         />
                       ) : (
                         <input
+                          readOnly={!canEdit}
                           className={cn(
                             'block w-full border-0 bg-transparent px-2.5 py-1.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
                             !colWidths[col] && 'min-w-[140px]',
+                            !canEdit && 'cursor-default',
                           )}
                           value={row.cells[col] ?? ''}
                           onChange={e => updateCell(row.id, col, e.target.value)}
@@ -329,7 +367,7 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
                         className="h-8 w-full rounded border border-neutral-200 bg-white px-2 text-xs"
                         value={row.tactic_id ?? ''}
                         onChange={e => handleLinkWO(row.id, e.target.value)}
-                        disabled={isPending}
+                        disabled={isPending || !canEdit}
                       >
                         <option value="">Link existing…</option>
                         {workOrders.map(t => (
@@ -339,27 +377,29 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
                     </div>
                   </td>
                   <td className="border border-neutral-300 p-2 align-top">
-                    <div className="flex flex-col gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 justify-start px-2 text-xs"
-                        onClick={() => handleCreateWO(row.id)}
-                        disabled={isPending}
-                        title="Create work order from this row"
-                      >
-                        <ClipboardPlus className="h-3.5 w-3.5" />
-                        Create WO
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 justify-start px-2 text-xs text-danger-600"
-                        onClick={() => removeRow(row.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    {canEdit ? (
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 justify-start px-2 text-xs"
+                          onClick={() => handleCreateWO(row.id)}
+                          disabled={isPending}
+                          title="Create work order from this row"
+                        >
+                          <ClipboardPlus className="h-3.5 w-3.5" />
+                          Create WO
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 justify-start px-2 text-xs text-danger-600"
+                          onClick={() => removeRow(row.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               )
@@ -382,6 +422,16 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
           <Button variant="destructive" loading={isPending} onClick={confirmDelete}>Delete</Button>
         </DialogFooter>
       </Dialog>
+
+      {access.isOwner && (
+        <WorkSheetShareDialog
+          sheetId={sheet.id}
+          sheetName={sheet.name}
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          onChanged={onShareChange}
+        />
+      )}
     </div>
   )
 }

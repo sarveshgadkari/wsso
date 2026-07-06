@@ -4,7 +4,7 @@ import { useState, useRef, useTransition, KeyboardEvent, useMemo } from 'react'
 import {
   Plus, Trash2, Save, GripVertical, Type, List, ListOrdered,
   CheckSquare, Minus, Heading1, Heading2, Heading3,
-  ClipboardPlus,
+  ClipboardPlus, Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
@@ -14,13 +14,16 @@ import {
   deleteWorkSheet,
   createPersonalWorkOrder,
 } from '@/lib/actions/my-work'
-import type { WorkSheet, DocBlock, DocBlockType } from '@/lib/my-work/types'
+import type { WorkSheet, DocBlock, DocBlockType, WorkSheetAccess } from '@/lib/my-work/types'
+import { WorkSheetShareDialog } from './WorkSheetShareDialog'
 import { cn } from '@/lib/utils'
 
 interface Props {
   sheet:         WorkSheet
+  access:        WorkSheetAccess
   onSheetChange: (sheet: WorkSheet) => void
   onSheetDelete: (id: string) => void
+  onShareChange: () => void
 }
 
 function newBlock(type: DocBlockType = 'paragraph'): DocBlock {
@@ -49,14 +52,16 @@ const TYPE_OPTIONS: { type: DocBlockType; label: string; icon: typeof Type }[] =
   { type: 'divider',   label: 'Divider',  icon: Minus },
 ]
 
-export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Props) {
+export function WorkDocumentEditor({ sheet, access, onSheetChange, onSheetDelete, onShareChange }: Props) {
   const toast = useToast()
+  const canEdit = access.canEdit
   const [blocks, setBlocks]     = useState<DocBlock[]>(
     sheet.blocks.length ? sheet.blocks : [newBlock('heading1'), newBlock('paragraph')],
   )
   const [dirty, setDirty]       = useState(false)
   const [isPending, start]      = useTransition()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [menuBlockId, setMenuBlockId] = useState<string | null>(null)
   const inputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
 
@@ -192,24 +197,48 @@ export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Prop
         <div>
           <h3 className="text-lg font-semibold text-neutral-900">{sheet.name}</h3>
           <p className="text-xs text-neutral-400">Notion-style page — headings, lists, to-dos</p>
+          {!access.isOwner && access.ownerName && (
+            <p className="mt-0.5 text-xs text-primary-600">
+              Shared by {access.ownerName}
+              {!canEdit && ' · View only'}
+              {canEdit && ' · You can edit'}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={() => {
-            const nb = newBlock('paragraph')
-            setBlocks(prev => [...prev, nb])
-            markDirty()
-          }}>
-            <Plus className="h-3.5 w-3.5" /> Block
-          </Button>
-          <Button variant="secondary" size="sm" onClick={createWOFromPage} disabled={isPending}>
-            <ClipboardPlus className="h-3.5 w-3.5" /> Create work order
-          </Button>
-          <Button size="sm" onClick={save} loading={isPending} disabled={!dirty}>
-            <Save className="h-3.5 w-3.5" /> Save
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {access.isOwner && (
+            <Button variant="secondary" size="sm" onClick={() => setShareOpen(true)}>
+              <Users className="h-3.5 w-3.5" />
+              Share
+              {(access.shareCount ?? 0) > 0 && (
+                <span className="rounded-full bg-primary-100 px-1.5 text-xs text-primary-700">
+                  {access.shareCount}
+                </span>
+              )}
+            </Button>
+          )}
+          {canEdit && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => {
+                const nb = newBlock('paragraph')
+                setBlocks(prev => [...prev, nb])
+                markDirty()
+              }}>
+                <Plus className="h-3.5 w-3.5" /> Block
+              </Button>
+              <Button variant="secondary" size="sm" onClick={createWOFromPage} disabled={isPending}>
+                <ClipboardPlus className="h-3.5 w-3.5" /> Create work order
+              </Button>
+              <Button size="sm" onClick={save} loading={isPending} disabled={!dirty}>
+                <Save className="h-3.5 w-3.5" /> Save
+              </Button>
+            </>
+          )}
+          {access.isOwner && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -232,8 +261,9 @@ export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Prop
                 <button
                   type="button"
                   className="mt-2 shrink-0 opacity-0 transition-opacity group-hover:opacity-40"
-                  onClick={() => setMenuBlockId(menuBlockId === block.id ? null : block.id)}
+                  onClick={() => canEdit && setMenuBlockId(menuBlockId === block.id ? null : block.id)}
                   title="Change block type"
+                  disabled={!canEdit}
                 >
                   <GripVertical className="h-4 w-4 text-neutral-400" />
                 </button>
@@ -251,6 +281,7 @@ export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Prop
                     type="checkbox"
                     className="mt-3 h-4 w-4 shrink-0 rounded border-neutral-300"
                     checked={!!block.checked}
+                    disabled={!canEdit}
                     onChange={e => updateBlock(block.id, { checked: e.target.checked })}
                   />
                 )}
@@ -258,6 +289,7 @@ export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Prop
                 <textarea
                   ref={el => { inputRefs.current[block.id] = el }}
                   rows={1}
+                  readOnly={!canEdit}
                   value={block.text}
                   placeholder={
                     block.type === 'heading1' ? 'Untitled' :
@@ -304,19 +336,21 @@ export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Prop
           })}
         </div>
 
-        <button
-          type="button"
-          className="mx-auto mt-6 flex w-full max-w-3xl items-center gap-2 rounded-md px-2 py-2 text-sm text-neutral-400 hover:bg-neutral-50 hover:text-neutral-600"
-          onClick={() => {
-            const nb = newBlock('paragraph')
-            setBlocks(prev => [...prev, nb])
-            markDirty()
-            setTimeout(() => inputRefs.current[nb.id]?.focus(), 0)
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Click to add a block, or press Enter at the end of a line
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            className="mx-auto mt-6 flex w-full max-w-3xl items-center gap-2 rounded-md px-2 py-2 text-sm text-neutral-400 hover:bg-neutral-50 hover:text-neutral-600"
+            onClick={() => {
+              const nb = newBlock('paragraph')
+              setBlocks(prev => [...prev, nb])
+              markDirty()
+              setTimeout(() => inputRefs.current[nb.id]?.focus(), 0)
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Click to add a block, or press Enter at the end of a line
+          </button>
+        )}
       </div>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete page?">
@@ -328,6 +362,16 @@ export function WorkDocumentEditor({ sheet, onSheetChange, onSheetDelete }: Prop
           <Button variant="destructive" loading={isPending} onClick={confirmDelete}>Delete</Button>
         </DialogFooter>
       </Dialog>
+
+      {access.isOwner && (
+        <WorkSheetShareDialog
+          sheetId={sheet.id}
+          sheetName={sheet.name}
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          onChanged={onShareChange}
+        />
+      )}
     </div>
   )
 }

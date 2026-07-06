@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Paperclip, Link2, Upload, FileText, ExternalLink, Trash2, Send,
+  Paperclip, Link2, Upload, FileText, ExternalLink, Trash2, Send, MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/lib/store/toast'
@@ -17,6 +17,13 @@ import {
 import { submitWorkUpdate } from '@/lib/actions/tactics'
 import type { TacticStatus, UserRole } from '@/lib/types'
 
+export interface WorkUpdateEntry {
+  id:         string
+  notes:      string | null
+  created_at: string
+  actor:      { full_name: string } | null
+}
+
 interface Props {
   tacticId:         string
   tacticCode:       string
@@ -25,6 +32,7 @@ interface Props {
   currentUserId:    string
   assignedTo:       string
   initialDocuments: DocumentMeta[]
+  workUpdates:      WorkUpdateEntry[]
 }
 
 export function WorkOrderWorkPanel({
@@ -35,6 +43,7 @@ export function WorkOrderWorkPanel({
   currentUserId,
   assignedTo,
   initialDocuments,
+  workUpdates,
 }: Props) {
   const router = useRouter()
   const toast  = useToast()
@@ -220,6 +229,29 @@ export function WorkOrderWorkPanel({
             </Button>
           </div>
         </form>
+      )}
+
+      {workUpdates.length > 0 && (
+        <div className="mb-4">
+          <div className="mb-2 flex items-center gap-1.5">
+            <MessageSquare className="h-3.5 w-3.5 text-neutral-400" />
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Work updates
+            </h4>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {workUpdates.map(u => (
+              <li key={u.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2">
+                <p className="whitespace-pre-wrap text-sm text-neutral-700">{u.notes}</p>
+                <p className="mt-1 text-xs text-neutral-400">
+                  {u.actor?.full_name ?? 'Unknown'} · {new Date(u.created_at).toLocaleString([], {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {docs.length === 0 ? (

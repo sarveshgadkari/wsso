@@ -197,6 +197,7 @@ export function TacticDetail({
         currentUserId={currentUserId}
         assignedTo={tactic.assigned_to}
         initialDocuments={documents}
+        workUpdates={logs.filter(l => l.action === 'Work update')}
       />
 
       {/* Activity timeline */}

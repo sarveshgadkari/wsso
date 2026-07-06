@@ -6,7 +6,15 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { parseExcelBuffer } from '@/lib/my-work/parse-excel'
-import type { WorkSheet, WorkSheetRow, WorkOrderOption, DocBlock } from '@/lib/my-work/types'
+import type {
+  WorkSheet,
+  WorkSheetRow,
+  WorkOrderOption,
+  DocBlock,
+  WorkSheetWithAccess,
+  WorkSheetShare,
+  ShareableUser,
+} from '@/lib/my-work/types'
 import { DEFAULT_DOCUMENT_BLOCKS } from '@/lib/my-work/types'
 
 const MAX_ROWS = 2000
@@ -27,20 +35,123 @@ function parseSheetRow(raw: unknown): WorkSheet {
   }
 }
 
+async function assertSheetAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sheetId: string,
+  profileId: string,
+  needEdit = false,
+) {
+  const { data: sheet } = await supabase
+    .from('employee_work_sheets')
+    .select('employee_id')
+    .eq('id', sheetId)
+    .maybeSingle()
+
+  if (!sheet) throw new Error('Sheet not found')
+
+  if (sheet.employee_id === profileId) return { isOwner: true, canEdit: true }
+
+  const { data: share } = await supabase
+    .from('employee_work_sheet_shares')
+    .select('can_edit')
+    .eq('sheet_id', sheetId)
+    .eq('shared_with', profileId)
+    .maybeSingle()
+
+  if (!share) throw new Error('Sheet not found or access denied')
+  if (needEdit && !share.can_edit) throw new Error('You only have view access to this sheet')
+
+  return { isOwner: false, canEdit: share.can_edit }
+}
+
+async function assertSheetOwner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sheetId: string,
+  profileId: string,
+) {
+  const { data: sheet } = await supabase
+    .from('employee_work_sheets')
+    .select('employee_id')
+    .eq('id', sheetId)
+    .eq('employee_id', profileId)
+    .maybeSingle()
+
+  if (!sheet) throw new Error('Sheet not found or you are not the owner')
+}
+
 // ── List / read ───────────────────────────────────────────────────────────────
 
-export async function listMyWorkSheets(): Promise<WorkSheet[]> {
+export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('employee_work_sheets')
-    .select('*')
-    .eq('employee_id', profile.id)
-    .order('updated_at', { ascending: false })
+  const [{ data: owned, error: ownedErr }, { data: shareRows, error: shareErr }] =
+    await Promise.all([
+      supabase
+        .from('employee_work_sheets')
+        .select('*')
+        .eq('employee_id', profile.id)
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('employee_work_sheet_shares')
+        .select('can_edit, sheet:employee_work_sheets(*)')
+        .eq('shared_with', profile.id),
+    ])
 
-  if (error) throw new Error(error.message)
-  return (data ?? []).map(parseSheetRow)
+  if (ownedErr) throw new Error(ownedErr.message)
+  if (shareErr) throw new Error(shareErr.message)
+
+  const ownedIds = (owned ?? []).map(s => s.id)
+  const shareCountMap: Record<string, number> = {}
+
+  if (ownedIds.length > 0) {
+    const { data: shareCounts } = await supabase
+      .from('employee_work_sheet_shares')
+      .select('sheet_id')
+      .in('sheet_id', ownedIds)
+
+    for (const row of shareCounts ?? []) {
+      shareCountMap[row.sheet_id] = (shareCountMap[row.sheet_id] ?? 0) + 1
+    }
+  }
+
+  const ownedSheets: WorkSheetWithAccess[] = (owned ?? []).map(s => ({
+    ...parseSheetRow(s),
+    access: {
+      isOwner:     true,
+      canEdit:     true,
+      shareCount:  shareCountMap[s.id] ?? 0,
+    },
+  }))
+
+  const sharedRaw = (shareRows ?? []).filter(row => row.sheet)
+  const ownerIds = Array.from(new Set(
+    sharedRaw.map(row => parseSheetRow(row.sheet as unknown).employee_id),
+  ))
+  const ownerNameMap: Record<string, string> = {}
+  if (ownerIds.length > 0) {
+    const { data: owners } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', ownerIds)
+    for (const o of owners ?? []) ownerNameMap[o.id] = o.full_name
+  }
+
+  const sharedSheets: WorkSheetWithAccess[] = sharedRaw
+    .map(row => {
+      const sheet = parseSheetRow(row.sheet as unknown)
+      return {
+        ...sheet,
+        access: {
+          isOwner:    false,
+          canEdit:    row.can_edit,
+          ownerName:  ownerNameMap[sheet.employee_id] ?? null,
+        },
+      }
+    })
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+
+  return [...ownedSheets, ...sharedSheets]
 }
 
 export async function getMyWorkSheetCount(): Promise<number> {
@@ -184,6 +295,8 @@ export async function updateWorkSheet(
   const input   = updateSchema.parse(raw)
   const supabase = await createClient()
 
+  await assertSheetAccess(supabase, sheetId, profile.id, true)
+
   const patch: Record<string, unknown> = {}
   if (input.name    !== undefined) patch.name    = input.name
   if (input.columns !== undefined) patch.columns = input.columns
@@ -194,7 +307,6 @@ export async function updateWorkSheet(
     .from('employee_work_sheets')
     .update(patch)
     .eq('id', sheetId)
-    .eq('employee_id', profile.id)
     .select()
     .single()
 
@@ -279,11 +391,12 @@ export async function linkRowToWorkOrder(
   const profile  = await requireProfile()
   const supabase = await createClient()
 
+  await assertSheetAccess(supabase, sheetId, profile.id, true)
+
   const { data: sheet, error: fetchErr } = await supabase
     .from('employee_work_sheets')
     .select('rows')
     .eq('id', sheetId)
-    .eq('employee_id', profile.id)
     .single()
 
   if (fetchErr || !sheet) throw new Error('Sheet not found')
@@ -308,7 +421,6 @@ export async function linkRowToWorkOrder(
     .from('employee_work_sheets')
     .update({ rows })
     .eq('id', sheetId)
-    .eq('employee_id', profile.id)
 
   if (error) throw new Error(error.message)
   revalidateMyWork()
@@ -322,11 +434,12 @@ export async function createWorkOrderFromRow(
   const profile  = await requireProfile()
   const supabase = await createClient()
 
+  await assertSheetAccess(supabase, sheetId, profile.id, true)
+
   const { data: sheet, error: fetchErr } = await supabase
     .from('employee_work_sheets')
     .select('*')
     .eq('id', sheetId)
-    .eq('employee_id', profile.id)
     .single()
 
   if (fetchErr || !sheet) throw new Error('Sheet not found')
@@ -353,4 +466,158 @@ export async function createWorkOrderFromRow(
     sheet: { ...parsed, rows },
     tactic,
   }
+}
+
+// ── Sharing ───────────────────────────────────────────────────────────────────
+
+export async function getShareableUsers(): Promise<ShareableUser[]> {
+  const profile = await requireProfile()
+
+  const [{ data: elevated }, { data: me }] = await Promise.all([
+    supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, employee_code, role')
+      .in('role', ['admin', 'manager'])
+      .eq('status', 'active')
+      .order('full_name'),
+    supabaseAdmin
+      .from('profiles')
+      .select('manager_id')
+      .eq('id', profile.id)
+      .single(),
+  ])
+
+  const byId = new Map<string, ShareableUser>()
+  for (const u of elevated ?? []) {
+    if (u.id !== profile.id) byId.set(u.id, u as ShareableUser)
+  }
+
+  if (me?.manager_id && me.manager_id !== profile.id) {
+    const { data: manager } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, employee_code, role')
+      .eq('id', me.manager_id)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (manager) byId.set(manager.id, manager as ShareableUser)
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.full_name.localeCompare(b.full_name))
+}
+
+export async function listWorkSheetShares(sheetId: string): Promise<WorkSheetShare[]> {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+  await assertSheetOwner(supabase, sheetId, profile.id)
+
+  const { data, error } = await supabase
+    .from('employee_work_sheet_shares')
+    .select('id, sheet_id, shared_with, can_edit, created_at')
+    .eq('sheet_id', sheetId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  if (!data?.length) return []
+
+  const userIds = data.map(r => r.shared_with)
+  const { data: users } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, employee_code, role')
+    .in('id', userIds)
+
+  const userMap = Object.fromEntries((users ?? []).map(u => [u.id, u as ShareableUser]))
+
+  return data.map(row => ({
+    id:          row.id,
+    sheet_id:    row.sheet_id,
+    shared_with: row.shared_with,
+    can_edit:    row.can_edit,
+    created_at:  row.created_at,
+    user:        userMap[row.shared_with] ?? {
+      id:            row.shared_with,
+      full_name:     'Unknown',
+      employee_code: '—',
+      role:          'employee',
+    },
+  }))
+}
+
+export async function shareWorkSheet(
+  sheetId: string,
+  userId: string,
+  canEdit: boolean,
+): Promise<WorkSheetShare> {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+  await assertSheetOwner(supabase, sheetId, profile.id)
+
+  if (userId === profile.id) throw new Error('You cannot share a sheet with yourself')
+
+  const { data: target, error: targetErr } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, employee_code, role')
+    .eq('id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  if (targetErr || !target) throw new Error('User not found')
+  if (!['admin', 'manager'].includes(target.role)) {
+    throw new Error('You can only share with managers or admins')
+  }
+
+  const { data, error } = await supabase
+    .from('employee_work_sheet_shares')
+    .upsert({
+      sheet_id:    sheetId,
+      shared_with: userId,
+      can_edit:    canEdit,
+      created_by:  profile.id,
+    }, { onConflict: 'sheet_id,shared_with' })
+    .select('id, sheet_id, shared_with, can_edit, created_at')
+    .single()
+
+  if (error) throw new Error(error.message)
+  revalidateMyWork()
+  return {
+    id:          data.id,
+    sheet_id:    data.sheet_id,
+    shared_with: data.shared_with,
+    can_edit:    data.can_edit,
+    created_at:  data.created_at,
+    user:        target as ShareableUser,
+  }
+}
+
+export async function updateWorkSheetShare(
+  sheetId: string,
+  shareId: string,
+  canEdit: boolean,
+): Promise<void> {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+  await assertSheetOwner(supabase, sheetId, profile.id)
+
+  const { error } = await supabase
+    .from('employee_work_sheet_shares')
+    .update({ can_edit: canEdit })
+    .eq('id', shareId)
+    .eq('sheet_id', sheetId)
+
+  if (error) throw new Error(error.message)
+  revalidateMyWork()
+}
+
+export async function removeWorkSheetShare(sheetId: string, shareId: string): Promise<void> {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+  await assertSheetOwner(supabase, sheetId, profile.id)
+
+  const { error } = await supabase
+    .from('employee_work_sheet_shares')
+    .delete()
+    .eq('id', shareId)
+    .eq('sheet_id', sheetId)
+
+  if (error) throw new Error(error.message)
+  revalidateMyWork()
 }

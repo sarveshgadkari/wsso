@@ -37,6 +37,31 @@ export interface WorkSheet {
   updated_at:      string
 }
 
+export interface WorkSheetAccess {
+  isOwner:     boolean
+  canEdit:     boolean
+  ownerName?:  string | null
+  shareCount?: number
+}
+
+export type WorkSheetWithAccess = WorkSheet & { access: WorkSheetAccess }
+
+export interface ShareableUser {
+  id:            string
+  full_name:     string
+  employee_code: string
+  role:          string
+}
+
+export interface WorkSheetShare {
+  id:          string
+  sheet_id:    string
+  shared_with: string
+  can_edit:    boolean
+  created_at:  string
+  user:        ShareableUser
+}
+
 export interface WorkOrderOption {
   id:     string
   code:   string
