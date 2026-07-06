@@ -93,7 +93,7 @@ export function WorkSheetShareDialog({ sheetId, sheetName, open, onClose, onChan
   return (
     <Dialog open={open} onClose={onClose} title="Share sheet" size="md">
       <p className="mb-4 text-sm text-neutral-600">
-        Share <strong>{sheetName}</strong> with a manager or admin.
+        Share <strong>{sheetName}</strong> with anyone on the team.
         Turn on <strong>Collaborate</strong> so they can edit the sheet with you.
       </p>
 
@@ -111,7 +111,7 @@ export function WorkSheetShareDialog({ sheetId, sheetName, open, onClose, onChan
                 onChange={e => setSelectedId(e.target.value)}
                 className="h-9 w-full rounded border border-neutral-300 bg-white px-3 text-sm"
               >
-                <option value="">Select manager or admin…</option>
+                <option value="">Select a person…</option>
                 {available.map(u => (
                   <option key={u.id} value={u.id}>
                     {u.full_name} ({u.role}) — {u.employee_code}
@@ -134,7 +134,7 @@ export function WorkSheetShareDialog({ sheetId, sheetName, open, onClose, onChan
             </div>
           ) : (
             <p className="mb-4 text-sm text-neutral-400">
-              Everyone available is already shared, or no managers/admins are set up.
+              Everyone available is already shared.
             </p>
           )}
 

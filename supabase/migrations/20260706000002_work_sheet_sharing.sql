@@ -63,3 +63,6 @@ CREATE POLICY "ews_collaborator_update" ON public.employee_work_sheets
       WHERE shared_with = auth.uid() AND can_edit = true
     )
   );
+
+-- Refresh PostgREST schema cache so the API sees the new table immediately
+NOTIFY pgrst, 'reload schema';

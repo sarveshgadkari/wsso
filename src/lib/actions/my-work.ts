@@ -85,7 +85,7 @@ export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
-  const [{ data: owned, error: ownedErr }, { data: shareRows, error: shareErr }] =
+  const [{ data: owned, error: ownedErr }, shareResult] =
     await Promise.all([
       supabase
         .from('employee_work_sheets')
@@ -99,19 +99,26 @@ export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
     ])
 
   if (ownedErr) throw new Error(ownedErr.message)
-  if (shareErr) throw new Error(shareErr.message)
+
+  const shareRows = shareResult.error ? [] : (shareResult.data ?? [])
+  // If shares table isn't visible yet (schema cache), still show owned sheets.
+  if (shareResult.error) {
+    console.error('[listMyWorkSheets] shares query failed:', shareResult.error.message)
+  }
 
   const ownedIds = (owned ?? []).map(s => s.id)
   const shareCountMap: Record<string, number> = {}
 
   if (ownedIds.length > 0) {
-    const { data: shareCounts } = await supabase
+    const { data: shareCounts, error: countErr } = await supabase
       .from('employee_work_sheet_shares')
       .select('sheet_id')
       .in('sheet_id', ownedIds)
 
-    for (const row of shareCounts ?? []) {
-      shareCountMap[row.sheet_id] = (shareCountMap[row.sheet_id] ?? 0) + 1
+    if (!countErr) {
+      for (const row of shareCounts ?? []) {
+        shareCountMap[row.sheet_id] = (shareCountMap[row.sheet_id] ?? 0) + 1
+      }
     }
   }
 
@@ -473,36 +480,14 @@ export async function createWorkOrderFromRow(
 export async function getShareableUsers(): Promise<ShareableUser[]> {
   const profile = await requireProfile()
 
-  const [{ data: elevated }, { data: me }] = await Promise.all([
-    supabaseAdmin
-      .from('profiles')
-      .select('id, full_name, employee_code, role')
-      .in('role', ['admin', 'manager'])
-      .eq('status', 'active')
-      .order('full_name'),
-    supabaseAdmin
-      .from('profiles')
-      .select('manager_id')
-      .eq('id', profile.id)
-      .single(),
-  ])
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, employee_code, role')
+    .eq('status', 'active')
+    .neq('id', profile.id)
+    .order('full_name')
 
-  const byId = new Map<string, ShareableUser>()
-  for (const u of elevated ?? []) {
-    if (u.id !== profile.id) byId.set(u.id, u as ShareableUser)
-  }
-
-  if (me?.manager_id && me.manager_id !== profile.id) {
-    const { data: manager } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name, employee_code, role')
-      .eq('id', me.manager_id)
-      .eq('status', 'active')
-      .maybeSingle()
-    if (manager) byId.set(manager.id, manager as ShareableUser)
-  }
-
-  return Array.from(byId.values()).sort((a, b) => a.full_name.localeCompare(b.full_name))
+  return (data ?? []) as ShareableUser[]
 }
 
 export async function listWorkSheetShares(sheetId: string): Promise<WorkSheetShare[]> {
@@ -561,9 +546,6 @@ export async function shareWorkSheet(
     .maybeSingle()
 
   if (targetErr || !target) throw new Error('User not found')
-  if (!['admin', 'manager'].includes(target.role)) {
-    throw new Error('You can only share with managers or admins')
-  }
 
   const { data, error } = await supabase
     .from('employee_work_sheet_shares')
