@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback, useTransition } from 'react'
+import { useState, useCallback, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Plus, Trash2, Save, ExternalLink,
-  ClipboardPlus, Link2,
+  ClipboardPlus, Link2, WrapText,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { useToast } from '@/lib/store/toast'
@@ -30,6 +31,14 @@ function newRow(columns: string[]): WorkSheetRow {
   return { id: crypto.randomUUID(), cells, tactic_id: null }
 }
 
+const WRAP_PREF_KEY = 'wsso:my-work:wrap-text'
+
+function autoSize(el: HTMLTextAreaElement | null) {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
 export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete }: Props) {
   const toast = useToast()
   const [columns, setColumns] = useState(sheet.columns)
@@ -37,6 +46,20 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
   const [dirty, setDirty]     = useState(false)
   const [isPending, start]    = useTransition()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [wrapText, setWrapText] = useState(false)
+
+  // Load the saved preference after mount to avoid SSR hydration mismatch.
+  useEffect(() => {
+    setWrapText(localStorage.getItem(WRAP_PREF_KEY) === '1')
+  }, [])
+
+  const toggleWrap = () => {
+    setWrapText(prev => {
+      const next = !prev
+      localStorage.setItem(WRAP_PREF_KEY, next ? '1' : '0')
+      return next
+    })
+  }
 
   const markDirty = useCallback(() => setDirty(true), [])
 
@@ -140,6 +163,15 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={toggleWrap}
+            className={cn(wrapText && 'border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100')}
+            title={wrapText ? 'Show each cell on a single line' : 'Wrap long text inside cells (like Excel)'}
+          >
+            <WrapText className="h-3.5 w-3.5" /> Wrap
+          </Button>
           <Button variant="secondary" size="sm" onClick={addColumn} disabled={isPending}>
             <Plus className="h-3.5 w-3.5" /> Column
           </Button>
@@ -182,12 +214,26 @@ export function WorkSheetGrid({ sheet, workOrders, onSheetChange, onSheetDelete 
               return (
                 <tr key={row.id} className="hover:bg-neutral-50/80">
                   {columns.map(col => (
-                    <td key={col} className="p-1">
-                      <input
-                        className="w-full min-w-[120px] rounded border border-transparent bg-transparent px-2 py-1.5 text-sm focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-200"
-                        value={row.cells[col] ?? ''}
-                        onChange={e => updateCell(row.id, col, e.target.value)}
-                      />
+                    <td key={col} className={cn('p-1', wrapText && 'align-top')}>
+                      {wrapText ? (
+                        <textarea
+                          key={`${col}-wrap`}
+                          ref={autoSize}
+                          rows={1}
+                          className="block w-full min-w-[120px] max-w-[360px] resize-none overflow-hidden whitespace-pre-wrap break-words rounded border border-transparent bg-transparent px-2 py-1.5 text-sm leading-snug focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-200"
+                          value={row.cells[col] ?? ''}
+                          onChange={e => {
+                            updateCell(row.id, col, e.target.value)
+                            autoSize(e.target)
+                          }}
+                        />
+                      ) : (
+                        <input
+                          className="w-full min-w-[120px] rounded border border-transparent bg-transparent px-2 py-1.5 text-sm focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-200"
+                          value={row.cells[col] ?? ''}
+                          onChange={e => updateCell(row.id, col, e.target.value)}
+                        />
+                      )}
                     </td>
                   ))}
                   <td className="p-2 align-top">
