@@ -233,3 +233,47 @@ export async function submitWorkUpdate(tacticId: string, notes: string) {
   revalidatePath(`/tactics/${tacticId}`)
   revalidatePath('/activity-log')
 }
+
+const DOCUMENTS_BUCKET = 'documents'
+
+export async function deleteTactic(id: string) {
+  const profile = await requireProfile()
+  const supabase = await createClient()
+
+  const { data: tactic, error: fetchErr } = await supabase
+    .from('tactics')
+    .select('id, code, title, created_by')
+    .eq('id', id)
+    .single()
+
+  if (fetchErr || !tactic) throw new Error('Work order not found or access denied')
+
+  if (profile.role !== 'admin' && tactic.created_by !== profile.id) {
+    throw new Error('Only the creator or an admin can delete this work order')
+  }
+
+  const { data: docs } = await supabaseAdmin
+    .from('documents')
+    .select('id, file_path, source_type')
+    .eq('tactic_code', tactic.code)
+
+  if (docs?.length) {
+    const filePaths = docs
+      .filter(d => d.source_type === 'file' && d.file_path)
+      .map(d => d.file_path!)
+    if (filePaths.length) {
+      await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).remove(filePaths)
+    }
+    await supabaseAdmin.from('documents').delete().eq('tactic_code', tactic.code)
+  }
+
+  const { error } = await supabase.from('tactics').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/tactics')
+  revalidatePath('/kanban')
+  revalidatePath('/documents')
+  revalidatePath('/dashboard')
+  revalidatePath('/my-work')
+  return { id }
+}

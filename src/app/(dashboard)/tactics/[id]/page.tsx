@@ -74,6 +74,7 @@ export default async function TacticDetailPage({ params }: Props) {
 
   // admin can edit all; manager can edit if they created it; employee cannot edit
   const canEdit = isAdmin || (isManager && tactic.created_by === profile.id)
+  const canDelete = isAdmin || tactic.created_by === profile.id
 
   return (
     <TacticDetail
@@ -84,6 +85,7 @@ export default async function TacticDetailPage({ params }: Props) {
       projects={projects}
       role={profile.role}
       canEdit={canEdit}
+      canDelete={canDelete}
       currentUserId={profile.id}
     />
   )

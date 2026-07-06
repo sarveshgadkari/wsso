@@ -3,9 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, User, Briefcase, Calendar, Clock, Flag } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, User, Briefcase, Calendar, Clock, Flag } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Dialog, DialogFooter } from '@/components/ui/Dialog'
+import { deleteTactic } from '@/lib/actions/tactics'
+import { useToast } from '@/lib/store/toast'
 import { TacticDialog, type TacticRow, type EmployeeOption, type ProjectOption } from './TacticDialog'
 import { TacticStatusButtons } from './TacticStatusButtons'
 import { HoursLogDialog } from './HoursLogDialog'
@@ -23,6 +26,7 @@ interface Props {
   projects:      ProjectOption[]
   role:          UserRole
   canEdit:       boolean
+  canDelete:     boolean
   currentUserId: string
 }
 
@@ -47,14 +51,30 @@ function MetaItem({
 }
 
 export function TacticDetail({
-  tactic: initialTactic, logs, documents, employees, projects, role, canEdit, currentUserId,
+  tactic: initialTactic, logs, documents, employees, projects, role, canEdit, canDelete, currentUserId,
 }: Props) {
   const router = useRouter()
-  const [tactic,   setTactic]   = useState<TacticRow>(initialTactic)
-  const [editOpen, setEditOpen] = useState(false)
+  const toast  = useToast()
+  const [tactic,      setTactic]      = useState<TacticRow>(initialTactic)
+  const [editOpen,    setEditOpen]    = useState(false)
+  const [deleteOpen,  setDeleteOpen]  = useState(false)
+  const [deleting,    setDeleting]    = useState(false)
 
   const status   = tactic.status   as TacticStatus
   const priority = tactic.priority as TacticPriority
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await deleteTactic(tactic.id)
+      toast.success('Work order deleted')
+      router.push('/tactics')
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete work order')
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,6 +105,17 @@ export function TacticDetail({
             <Button size="sm" variant="secondary" onClick={() => setEditOpen(true)}>
               <Pencil className="h-3.5 w-3.5" />
               Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="text-danger-600 hover:bg-danger-50 hover:text-danger-700"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
             </Button>
           )}
         </div>
@@ -186,6 +217,29 @@ export function TacticDetail({
           isAdmin={role === 'admin'}
           currentUserId={currentUserId}
         />
+      )}
+
+      {canDelete && (
+        <Dialog
+          open={deleteOpen}
+          onClose={() => !deleting && setDeleteOpen(false)}
+          title="Delete work order?"
+          description={`"${tactic.title}" (${tactic.code}) will be permanently removed.`}
+          size="sm"
+        >
+          <p className="text-sm text-neutral-600">
+            This cannot be undone. Activity history, meeting documents, and attachments
+            linked to this work order will also be removed.
+          </p>
+          <DialogFooter>
+            <Button variant="secondary" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" loading={deleting} onClick={handleDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </Dialog>
       )}
     </div>
   )
