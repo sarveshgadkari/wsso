@@ -334,18 +334,24 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
 
     start(async () => {
       try {
-        const sheet = await uploadWorkSheetExcel(fd)
-        const withAccess: WorkSheetWithAccess = {
-          ...sheet,
-          access: { isOwner: true, canEdit: true, shareCount: 0 },
-        }
-        upsertSheet(withAccess)
-        setSelectedId(withAccess.id)
+        const imported = await uploadWorkSheetExcel(fd)
+        imported.forEach(sheet => {
+          const withAccess: WorkSheetWithAccess = {
+            ...sheet,
+            access: { isOwner: true, canEdit: true, shareCount: 0 },
+          }
+          upsertSheet(withAccess)
+        })
+        if (imported[0]) setSelectedId(imported[0].id)
         setUploadOpen(false)
         setFile(null)
         setSheetName('')
         if (fileRef.current) fileRef.current.value = ''
-        toast.success(`Imported "${sheet.name}"`)
+        toast.success(
+          imported.length === 1
+            ? `Imported "${imported[0].name}"`
+            : `Imported ${imported.length} sheets from "${file.name}"`,
+        )
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Upload failed')
       }
@@ -694,7 +700,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
       <Dialog open={uploadOpen} onClose={() => setUploadOpen(false)} title="Upload Excel">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-neutral-600">
-            Import an existing spreadsheet. Row 1 = headers. Opens as an editable table (Excel-style).
+            Import an existing spreadsheet. Row 1 = headers. Each Excel tab becomes its own sheet in My Work.
           </p>
           {targetFolderName && (
             <p className="text-xs text-neutral-400">Creating in folder <strong>{targetFolderName}</strong></p>

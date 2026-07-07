@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { parseExcelBuffer } from '@/lib/my-work/parse-excel'
+import { parseExcelBufferAllSheets } from '@/lib/my-work/parse-excel'
 import { parseDocumentBuffer } from '@/lib/my-work/parse-document'
 import type {
   WorkSheet,
@@ -387,7 +387,7 @@ export async function createDocumentWorkSheet(name: string, folderId?: string | 
 
 // ── Upload Excel ──────────────────────────────────────────────────────────────
 
-export async function uploadWorkSheetExcel(formData: FormData): Promise<WorkSheet> {
+export async function uploadWorkSheetExcel(formData: FormData): Promise<WorkSheet[]> {
   const profile   = await requireProfile()
   const file      = formData.get('file')
   const nameRaw   = formData.get('name')
@@ -398,36 +398,45 @@ export async function uploadWorkSheetExcel(formData: FormData): Promise<WorkShee
     throw new Error('Please upload an Excel file (.xlsx or .xls)')
   }
 
-  const buffer = await file.arrayBuffer()
-  const { columns, rows } = parseExcelBuffer(buffer)
+  const buffer  = await file.arrayBuffer()
+  const parsed  = parseExcelBufferAllSheets(buffer)
+  if (!parsed.length) throw new Error('No worksheets found in this file')
 
-  if (rows.length > MAX_ROWS) {
-    throw new Error(`Sheet has too many rows (max ${MAX_ROWS}). Split into smaller files.`)
+  for (const sheet of parsed) {
+    if (sheet.rows.length > MAX_ROWS) {
+      throw new Error(
+        `Worksheet "${sheet.sheetName}" has too many rows (max ${MAX_ROWS}). Split into smaller files.`,
+      )
+    }
   }
 
-  const name = (typeof nameRaw === 'string' && nameRaw.trim())
-    ? nameRaw.trim()
-    : file.name.replace(/\.xlsx?$/i, '')
+  const customName = typeof nameRaw === 'string' && nameRaw.trim() ? nameRaw.trim() : null
+  const fileStem   = file.name.replace(/\.xlsx?$/i, '')
+  const baseName   = customName ?? fileStem
+  const folderId   = typeof folderRaw === 'string' && folderRaw ? folderRaw : null
+
+  const inserts = parsed.map(sheet => ({
+    employee_id:     profile.id,
+    name:            parsed.length === 1
+      ? baseName
+      : `${baseName} — ${sheet.sheetName}`,
+    sheet_type:      'spreadsheet' as const,
+    columns:         sheet.columns,
+    rows:            sheet.rows,
+    blocks:          [],
+    source_filename: file.name,
+    folder_id:       folderId,
+  }))
 
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('employee_work_sheets')
-    .insert({
-      employee_id:     profile.id,
-      name,
-      sheet_type:    'spreadsheet',
-      columns,
-      rows,
-      blocks:        [],
-      source_filename: file.name,
-      folder_id:     typeof folderRaw === 'string' && folderRaw ? folderRaw : null,
-    })
+    .insert(inserts)
     .select()
-    .single()
 
   if (error) throw new Error(error.message)
   revalidateMyWork()
-  return parseSheetRow(data)
+  return (data ?? []).map(parseSheetRow)
 }
 
 // ── Upload Document (Word .docx / .txt) ───────────────────────────────────────

@@ -5,6 +5,7 @@ import {
   TacticDocumentDetail,
   type TacticDocFull,
 } from '@/components/tactic-documents/TacticDocumentDetail'
+import { canManagerReviewEmployeeTacticDoc, getTacticDocumentShares } from '@/lib/actions/tactic-documents'
 
 interface Props {
   params: { id: string }
@@ -26,7 +27,7 @@ export default async function TacticDocumentPage({ params }: Props) {
       purpose, background_info, takeaways,
       status, reviewer_id, review_note, submitted_at, reviewed_at,
       created_by, created_at,
-      creator:profiles!tactic_documents_created_by_fkey(id, full_name, role, employee_code),
+      creator:profiles!tactic_documents_created_by_fkey(id, full_name, role, employee_code, manager_id),
       reviewer:profiles!tactic_documents_reviewer_id_fkey(id, full_name, role),
       company:companies!tactic_documents_company_id_fkey(id, name, code),
       project:projects!tactic_documents_project_id_fkey(id, name, code)
@@ -63,11 +64,32 @@ export default async function TacticDocumentPage({ params }: Props) {
     next_steps: (stepsRes.data ?? []) as unknown as TacticDocFull['next_steps'],
   }
 
+  let canReview = false
+  let shares: Awaited<ReturnType<typeof getTacticDocumentShares>> = []
+
+  if (doc.created_by === profile.id || profile.role === 'admin') {
+    shares = await getTacticDocumentShares(doc.id)
+  }
+
+  if (doc.status === 'submitted') {
+    if (profile.role === 'admin' && doc.creator.role === 'manager') {
+      canReview = true
+    } else if (profile.role === 'manager') {
+      canReview = await canManagerReviewEmployeeTacticDoc(profile.id, {
+        id:         doc.creator.id,
+        role:       doc.creator.role,
+        manager_id: (doc.creator as { manager_id?: string | null }).manager_id ?? null,
+      })
+    }
+  }
+
   return (
     <TacticDocumentDetail
       doc={doc}
       currentUserId={profile.id}
       role={profile.role}
+      canReview={canReview}
+      shares={shares}
     />
   )
 }

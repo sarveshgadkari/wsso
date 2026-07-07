@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import { requestRevision } from '@/lib/actions/tactic-documents'
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function RevisionModal({ open, docId, docCode, onClose }: Props) {
+  const router = useRouter()
   const [note,     setNote]    = useState('')
   const [error,    setError]   = useState('')
   const [isPending, start]     = useTransition()
@@ -33,6 +35,7 @@ export function RevisionModal({ open, docId, docCode, onClose }: Props) {
       try {
         await requestRevision(docId, note.trim())
         handleClose()
+        router.refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
       }

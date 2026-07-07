@@ -11,7 +11,9 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { RevisionModal } from './RevisionModal'
+import { TacticSharePanel } from './TacticSharePanel'
 import { approveTacticDocument, submitTacticDocument } from '@/lib/actions/tactic-documents'
+import type { TacticDocShareRow } from '@/lib/actions/tactic-documents'
 import { cn } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -36,7 +38,7 @@ export interface TacticDocFull {
   reviewed_at:    string | null
   created_by:     string
   created_at:     string
-  creator:        { id: string; full_name: string; role: string; employee_code: string }
+  creator:        { id: string; full_name: string; role: string; employee_code: string; manager_id?: string | null }
   reviewer:       { id: string; full_name: string; role: string } | null
   company:        { id: string; name: string; code: string } | null
   project:        { id: string; name: string; code: string } | null
@@ -67,6 +69,8 @@ interface Props {
   doc:         TacticDocFull
   currentUserId: string
   role:        string
+  canReview?:  boolean
+  shares?:     TacticDocShareRow[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,15 +117,12 @@ function fmtDateTime(iso: string | null): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function TacticDocumentDetail({ doc, currentUserId, role }: Props) {
+export function TacticDocumentDetail({
+  doc, currentUserId, role, canReview = false, shares = [],
+}: Props) {
   const router  = useRouter()
   const isOwner = doc.created_by === currentUserId
   const isAdmin = role === 'admin'
-
-  // Who should see the review panel?
-  const isManagerReviewer = role === 'manager' && doc.creator.role === 'employee'
-  const isAdminReviewer   = isAdmin && doc.creator.role === 'manager'
-  const canReview = doc.status === 'submitted' && (isManagerReviewer || isAdminReviewer)
 
   const [revisionOpen, setRevisionOpen] = useState(false)
   const [isPending, start] = useTransition()
@@ -132,6 +133,7 @@ export function TacticDocumentDetail({ doc, currentUserId, role }: Props) {
     start(async () => {
       try {
         await approveTacticDocument(doc.id)
+        router.refresh()
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Something went wrong.')
       }
@@ -259,6 +261,13 @@ export function TacticDocumentDetail({ doc, currentUserId, role }: Props) {
             </div>
           </div>
         )}
+
+        <TacticSharePanel
+          docId={doc.id}
+          docCode={doc.code}
+          shares={shares}
+          isOwner={isOwner}
+        />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_300px]">
 

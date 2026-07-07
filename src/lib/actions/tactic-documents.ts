@@ -87,6 +87,36 @@ async function insertTasksAndSteps(
   }
 }
 
+type TacticDocCreator = { id: string; role: string; manager_id: string | null }
+
+/** Direct line manager of the employee who created the TACTIC. */
+export async function canManagerReviewEmployeeTacticDoc(
+  managerId: string,
+  creator: TacticDocCreator,
+): Promise<boolean> {
+  return creator.role === 'employee' && creator.manager_id === managerId
+}
+
+async function assertCanReviewTacticDoc(
+  profile: Profile,
+  creator: TacticDocCreator,
+) {
+  if (profile.role === 'admin') {
+    if (creator.role !== 'manager')
+      throw new Error('Only manager-created TACTICs need admin review')
+    return
+  }
+
+  if (profile.role === 'manager') {
+    const allowed = await canManagerReviewEmployeeTacticDoc(profile.id, creator)
+    if (!allowed)
+      throw new Error('You are not authorized to review this TACTIC')
+    return
+  }
+
+  throw new Error('Only admin or manager can review')
+}
+
 async function notifyReviewer(
   creator: Profile,
   docId: string,
@@ -300,15 +330,9 @@ export async function approveTacticDocument(id: string) {
   if (!doc) throw new Error('Document not found')
   if (doc.status !== 'submitted') throw new Error('Document is not pending review')
 
-  const creator = doc.creator as {
-    id: string; role: string; manager_id: string | null; full_name: string
-  }
+  const creator = doc.creator as TacticDocCreator & { full_name: string }
 
-  // Authorization: manager can only approve their direct reports' documents
-  if (profile.role === 'manager') {
-    if (creator.role !== 'employee' || creator.manager_id !== profile.id)
-      throw new Error('You are not the reviewer for this document')
-  }
+  await assertCanReviewTacticDoc(profile, creator)
 
   const { error } = await supabaseAdmin
     .from('tactic_documents')
@@ -355,12 +379,9 @@ export async function requestRevision(id: string, note: string) {
   if (!doc) throw new Error('Document not found')
   if (doc.status !== 'submitted') throw new Error('Document is not pending review')
 
-  const creator = doc.creator as { id: string; role: string; manager_id: string | null }
+  const creator = doc.creator as TacticDocCreator
 
-  if (profile.role === 'manager') {
-    if (creator.role !== 'employee' || creator.manager_id !== profile.id)
-      throw new Error('You are not the reviewer for this document')
-  }
+  await assertCanReviewTacticDoc(profile, creator)
 
   const { error } = await supabaseAdmin
     .from('tactic_documents')
@@ -394,6 +415,148 @@ export async function requestRevision(id: string, note: string) {
 
   revalidatePath('/tactic-documents')
   revalidatePath(`/tactic-documents/${id}`)
+}
+
+export interface TacticDocShareRow {
+  id:          string
+  shared_with: string
+  created_at:  string
+  user:        { id: string; full_name: string; employee_code: string; role: string }
+}
+
+export async function getTacticDocumentShares(docId: string): Promise<TacticDocShareRow[]> {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('tactic_documents')
+    .select('created_by')
+    .eq('id', docId)
+    .single()
+
+  if (!doc) throw new Error('Document not found')
+  if (doc.created_by !== profile.id && profile.role !== 'admin')
+    throw new Error('Not authorized')
+
+  const { data, error } = await supabase
+    .from('tactic_document_shares')
+    .select(`
+      id, shared_with, created_at,
+      user:profiles!tactic_document_shares_shared_with_fkey(id, full_name, employee_code, role)
+    `)
+    .eq('tactic_document_id', docId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as TacticDocShareRow[]
+}
+
+export async function getShareableUsers(docId: string) {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('tactic_documents')
+    .select('created_by, code')
+    .eq('id', docId)
+    .single()
+
+  if (!doc) throw new Error('Document not found')
+  if (doc.created_by !== profile.id)
+    throw new Error('Only the owner can share this TACTIC')
+
+  const { data: existing } = await supabase
+    .from('tactic_document_shares')
+    .select('shared_with')
+    .eq('tactic_document_id', docId)
+
+  const alreadyShared = new Set((existing ?? []).map(r => r.shared_with))
+
+  const { data: users, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, employee_code, role')
+    .eq('status', 'active')
+    .neq('id', profile.id)
+    .order('full_name')
+
+  if (error) throw new Error(error.message)
+
+  return (users ?? []).filter(u => !alreadyShared.has(u.id)) as {
+    id: string; full_name: string; employee_code: string; role: string
+  }[]
+}
+
+export async function shareTacticDocument(docId: string, userId: string) {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('tactic_documents')
+    .select('id, code, created_by')
+    .eq('id', docId)
+    .single()
+
+  if (!doc) throw new Error('Document not found')
+  if (doc.created_by !== profile.id)
+    throw new Error('Only the owner can share this TACTIC')
+  if (userId === profile.id)
+    throw new Error('You cannot share with yourself')
+
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('id, full_name, status')
+    .eq('id', userId)
+    .single()
+
+  if (!target || target.status !== 'active')
+    throw new Error('User not found')
+
+  const { error } = await supabase.from('tactic_document_shares').insert({
+    tactic_document_id: docId,
+    shared_with:        userId,
+    shared_by:          profile.id,
+  })
+
+  if (error) {
+    if (error.code === '23505') throw new Error('Already shared with this person')
+    throw new Error(error.message)
+  }
+
+  await supabaseAdmin.from('notifications').insert({
+    user_id: userId,
+    type:    'tactic_doc_shared',
+    message: `${profile.full_name} shared TACTIC ${doc.code} with you`,
+    link:    `/tactic-documents/${docId}`,
+  })
+
+  revalidatePath('/tactic-documents')
+  revalidatePath(`/tactic-documents/${docId}`)
+}
+
+export async function unshareTacticDocument(docId: string, shareId: string) {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('tactic_documents')
+    .select('created_by')
+    .eq('id', docId)
+    .single()
+
+  if (!doc) throw new Error('Document not found')
+  if (doc.created_by !== profile.id && profile.role !== 'admin')
+    throw new Error('Not authorized')
+
+  const { error } = await supabase
+    .from('tactic_document_shares')
+    .delete()
+    .eq('id', shareId)
+    .eq('tactic_document_id', docId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/tactic-documents')
+  revalidatePath(`/tactic-documents/${docId}`)
 }
 
 export async function deleteTacticDocument(id: string) {
