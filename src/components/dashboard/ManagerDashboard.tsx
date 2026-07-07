@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Users, ListTodo, Loader, AlertCircle, Clock, ChevronRight, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { ClockWidget } from '@/components/time/ClockWidget'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
@@ -158,6 +159,8 @@ export async function ManagerDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ClockWidget />
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard label="Team size"   value={teamRes.count        ?? 0} icon={Users} />

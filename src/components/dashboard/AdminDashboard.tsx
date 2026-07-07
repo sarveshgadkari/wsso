@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
+import { ClockWidget } from '@/components/time/ClockWidget'
 import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
@@ -128,6 +129,8 @@ export async function AdminDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ClockWidget />
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
         <StatCard label="Companies"       value={companiesRes.count   ?? 0} icon={Building2} />
