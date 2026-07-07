@@ -277,6 +277,20 @@ Your personal workspace for spreadsheets, imported files, and rich-text document
 | **Import Excel** | Click **+** → Upload Excel | Bring in `.xlsx` files |
 | **Import Word/PDF** | Click **+** → Upload document | Import `.docx` or other files |
 
+#### Spreadsheet editing (Excel-like)
+
+| Action | How |
+|--------|-----|
+| Edit a cell | Click the cell and type |
+| Rename a column | **Double-click** the column header, type the new name, press Enter |
+| Delete a column | Hover the column header → click **×** (at least one column must remain) |
+| Add a column | Toolbar → **Column** |
+| Add a row | Toolbar → **Row** |
+| Delete a row | Hover the row number (**#**) → click the trash icon |
+| Resize a column | Drag the edge of the column header |
+| Wrap text | Toolbar → **Wrap** |
+| Save changes | Toolbar → **Save** |
+
 #### Organising with folders
 
 1. Click **New folder** in the left panel.

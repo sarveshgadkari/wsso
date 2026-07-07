@@ -143,7 +143,7 @@ export function TacticDialog({
       open={open}
       onClose={onClose}
       title={isEdit ? 'Edit work order' : 'New work order'}
-      size="lg"
+      size="xl"
     >
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
         {errors.root && (

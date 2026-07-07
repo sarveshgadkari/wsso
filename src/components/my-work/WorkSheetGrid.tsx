@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Plus, Trash2, Save, ExternalLink,
-  ClipboardPlus, Link2, WrapText, Users,
+  ClipboardPlus, Link2, WrapText, Users, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -56,6 +56,15 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [wrapText, setWrapText] = useState(false)
+  const [editingCol, setEditingCol] = useState<string | null>(null)
+  const [editingColName, setEditingColName] = useState('')
+
+  useEffect(() => {
+    setColumns(sheet.columns)
+    setRows(sheet.rows)
+    setDirty(false)
+    setEditingCol(null)
+  }, [sheet.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load the saved preference after mount to avoid SSR hydration mismatch.
   // Wrapping defaults to on unless the user explicitly turned it off.
@@ -143,6 +152,63 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
     setColumns(prev => [...prev, name])
     setRows(prev => prev.map(r => ({ ...r, cells: { ...r.cells, [name]: '' } })))
     markDirty()
+  }
+
+  const renameColumn = (oldName: string, rawNewName: string) => {
+    const newName = rawNewName.trim()
+    setEditingCol(null)
+    if (!newName || newName === oldName) return
+    if (columns.some(c => c === newName)) {
+      toast.error('A column with that name already exists')
+      return
+    }
+    setColumns(prev => prev.map(c => (c === oldName ? newName : c)))
+    setRows(prev =>
+      prev.map(r => {
+        const cells = { ...r.cells }
+        cells[newName] = cells[oldName] ?? ''
+        delete cells[oldName]
+        return { ...r, cells }
+      }),
+    )
+    setColWidths(prev => {
+      if (prev[oldName] === undefined) return prev
+      const next = { ...prev, [newName]: prev[oldName] }
+      delete next[oldName]
+      localStorage.setItem(widthsKey, JSON.stringify(next))
+      return next
+    })
+    markDirty()
+  }
+
+  const removeColumn = (colName: string) => {
+    if (columns.length <= 1) {
+      toast.error('Cannot delete the last column')
+      return
+    }
+    setColumns(prev => prev.filter(c => c !== colName))
+    setRows(prev =>
+      prev.map(r => {
+        const cells = { ...r.cells }
+        delete cells[colName]
+        return { ...r, cells }
+      }),
+    )
+    setColWidths(prev => {
+      if (prev[colName] === undefined) return prev
+      const next = { ...prev }
+      delete next[colName]
+      localStorage.setItem(widthsKey, JSON.stringify(next))
+      return next
+    })
+    if (editingCol === colName) setEditingCol(null)
+    markDirty()
+  }
+
+  const startRenameColumn = (col: string) => {
+    if (!canEdit) return
+    setEditingCol(col)
+    setEditingColName(col)
   }
 
   const save = () => {
@@ -286,11 +352,52 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
                   key={col}
                   style={colStyle(col)}
                   className={cn(
-                    'relative border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-left text-xs font-semibold text-neutral-600',
+                    'relative border border-neutral-300 bg-neutral-100 px-1 py-1.5 text-left text-xs font-semibold text-neutral-600',
                     !colWidths[col] && 'min-w-[140px]',
                   )}
                 >
-                  {col}
+                  <div className="group flex min-w-0 items-center gap-0.5 pr-2">
+                    {editingCol === col ? (
+                      <input
+                        autoFocus
+                        className="min-w-0 flex-1 rounded border border-primary-400 bg-white px-1.5 py-0.5 text-xs font-semibold text-neutral-800 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        value={editingColName}
+                        onChange={e => setEditingColName(e.target.value)}
+                        onBlur={() => renameColumn(col, editingColName)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') e.currentTarget.blur()
+                          if (e.key === 'Escape') {
+                            setEditingCol(null)
+                            setEditingColName(col)
+                          }
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <>
+                        <span
+                          className={cn(
+                            'min-w-0 flex-1 truncate px-1.5',
+                            canEdit && 'cursor-text rounded hover:bg-neutral-200/80',
+                          )}
+                          onDoubleClick={() => startRenameColumn(col)}
+                          title={canEdit ? 'Double-click to rename column' : col}
+                        >
+                          {col}
+                        </span>
+                        {canEdit && columns.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeColumn(col)}
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-neutral-400 opacity-0 transition-opacity hover:bg-danger-100 hover:text-danger-600 group-hover:opacity-100"
+                            title="Delete column"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                   <div
                     onPointerDown={e => startResize(col, e)}
                     className="absolute -right-[3px] top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-primary-400/70 active:bg-primary-500"
@@ -314,9 +421,23 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
             ) : rows.map((row, rowIdx) => {
               const linked = linkedTactic(row.tactic_id)
               return (
-                <tr key={row.id}>
-                  <td className="border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none">
-                    {rowIdx + 1}
+                <tr key={row.id} className="group/row">
+                  <td className="relative border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none">
+                    {canEdit ? (
+                      <>
+                        <span className="group-hover/row:invisible">{rowIdx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeRow(row.id)}
+                          className="absolute inset-0 flex items-center justify-center text-danger-500 opacity-0 transition-opacity hover:bg-danger-50 group-hover/row:opacity-100"
+                          title="Delete row"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      rowIdx + 1
+                    )}
                   </td>
                   {columns.map(col => (
                     <td key={col} style={colStyle(col)} className="border border-neutral-300 p-0 align-top">
@@ -378,27 +499,17 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
                   </td>
                   <td className="border border-neutral-300 p-2 align-top">
                     {canEdit ? (
-                      <div className="flex flex-col gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 justify-start px-2 text-xs"
-                          onClick={() => handleCreateWO(row.id)}
-                          disabled={isPending}
-                          title="Create work order from this row"
-                        >
-                          <ClipboardPlus className="h-3.5 w-3.5" />
-                          Create WO
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 justify-start px-2 text-xs text-danger-600"
-                          onClick={() => removeRow(row.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 justify-start px-2 text-xs"
+                        onClick={() => handleCreateWO(row.id)}
+                        disabled={isPending}
+                        title="Create work order from this row"
+                      >
+                        <ClipboardPlus className="h-3.5 w-3.5" />
+                        Create WO
+                      </Button>
                     ) : null}
                   </td>
                 </tr>
@@ -410,7 +521,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
 
       <p className="text-xs text-neutral-400">
         <Link2 className="mr-1 inline h-3 w-3" />
-        Link a row to an existing work order, or <strong>Create WO</strong> to turn a row into a new personal work order.
+        Double-click a column header to rename · hover row # or column header to delete · Link a row to a work order or use <strong>Create WO</strong>.
       </p>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete sheet?">
