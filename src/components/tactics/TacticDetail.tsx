@@ -61,6 +61,19 @@ export function TacticDetail({
   const [deleting,    setDeleting]    = useState(false)
   const [pendingWorkNote, setPendingWorkNote] = useState('')
 
+  const latestSendBack = logs.find(
+    l => l.action === 'Status changed to In Progress'
+      && l.notes?.trim()
+      && l.employee_id !== tactic.assigned_to,
+  )
+  const managerFeedback = latestSendBack?.notes?.trim()
+    ? {
+        notes:      latestSendBack.notes.trim(),
+        created_at: latestSendBack.created_at,
+        actor:      latestSendBack.actor,
+      }
+    : null
+
   const status   = tactic.status   as TacticStatus
   const priority = tactic.priority as TacticPriority
 
@@ -224,6 +237,7 @@ export function TacticDetail({
         assignedTo={tactic.assigned_to}
         initialDocuments={documents}
         workUpdates={logs.filter(l => l.action === 'Work update')}
+        managerFeedback={managerFeedback}
         pendingNote={pendingWorkNote}
         onPendingNoteChange={setPendingWorkNote}
       />

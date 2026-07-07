@@ -29,10 +29,19 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function actionIcon(action: string) {
+function actionLabel(action: string, notes: string | null): string {
+  if (action === 'Tactic created') return 'Work order created'
+  if (action === 'Tactic updated') return 'Work order updated'
+  if (action === 'Status changed to In Progress' && notes?.trim()) {
+    return 'Sent back for revision'
+  }
+  return action
+}
+function actionIcon(action: string, notes: string | null) {
   if (action.startsWith('Logged'))              return Clock
   if (action === 'Tactic created')              return Plus
   if (action === 'Tactic updated')              return Pencil
+  if (action.includes('In Progress') && notes?.trim()) return RotateCcw
   if (action.includes('In Progress'))           return RotateCcw
   return CheckCircle
 }
@@ -48,7 +57,9 @@ export function ActivityTimeline({ logs }: Props) {
     <div className="relative flex flex-col">
       <div className="absolute bottom-4 left-4 top-4 w-px bg-neutral-100" aria-hidden />
       {logs.map(log => {
-        const Icon = actionIcon(log.action)
+        const Icon = actionIcon(log.action, log.notes)
+        const label = actionLabel(log.action, log.notes)
+        const isFeedback = log.action === 'Status changed to In Progress' && !!log.notes?.trim()
         return (
           <div key={log.id} className="relative flex gap-3 pb-5 last:pb-0">
             <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-neutral-200">
@@ -60,7 +71,7 @@ export function ActivityTimeline({ logs }: Props) {
                 <p className="text-sm text-neutral-800">
                   <span className="font-medium">{log.actor?.full_name ?? 'Unknown'}</span>
                   {' '}
-                  <span className="text-neutral-600">{log.action.replace('Tactic created', 'Work order created').replace('Tactic updated', 'Work order updated')}</span>
+                  <span className="text-neutral-600">{label}</span>
                   {log.hours_logged != null && (
                     <span className="ml-1.5 inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
                       {log.hours_logged}h
@@ -70,7 +81,9 @@ export function ActivityTimeline({ logs }: Props) {
                 <time className="shrink-0 text-xs text-neutral-400">{timeAgo(log.created_at)}</time>
               </div>
               {log.notes && (
-                <p className="mt-1 text-sm italic text-neutral-500">{log.notes}</p>
+                <p className={`mt-1 text-sm ${isFeedback ? 'rounded-md bg-amber-50 px-2 py-1.5 text-amber-950 not-italic' : 'italic text-neutral-500'}`}>
+                  {log.notes}
+                </p>
               )}
             </div>
           </div>

@@ -4,6 +4,7 @@ import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Paperclip, Link2, Upload, FileText, ExternalLink, Trash2, Send, MessageSquare,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/lib/store/toast'
@@ -24,6 +25,12 @@ export interface WorkUpdateEntry {
   actor:      { full_name: string } | null
 }
 
+export interface ManagerFeedbackEntry {
+  notes:      string
+  created_at: string
+  actor:      { full_name: string } | null
+}
+
 interface Props {
   tacticId:         string
   tacticCode:       string
@@ -33,6 +40,7 @@ interface Props {
   assignedTo:       string
   initialDocuments: DocumentMeta[]
   workUpdates:      WorkUpdateEntry[]
+  managerFeedback?: ManagerFeedbackEntry | null
   pendingNote?:     string
   onPendingNoteChange?: (note: string) => void
 }
@@ -46,6 +54,7 @@ export function WorkOrderWorkPanel({
   assignedTo,
   initialDocuments,
   workUpdates,
+  managerFeedback,
   pendingNote,
   onPendingNoteChange,
 }: Props) {
@@ -157,6 +166,23 @@ export function WorkOrderWorkPanel({
         <Paperclip className="h-4 w-4 text-primary-500" />
         <h3 className="text-sm font-semibold text-neutral-800">Your work &amp; attachments</h3>
       </div>
+
+      {isAssignee && managerFeedback && (
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5 text-amber-700" />
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+              Manager feedback — revision requested
+            </h4>
+          </div>
+          <p className="whitespace-pre-wrap text-sm text-amber-950">{managerFeedback.notes}</p>
+          <p className="mt-2 text-xs text-amber-700">
+            {managerFeedback.actor?.full_name ?? 'Manager'} · {new Date(managerFeedback.created_at).toLocaleString([], {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            })}
+          </p>
+        </div>
+      )}
 
       {canContribute && (
         <div className="mb-5 flex flex-col gap-3">
