@@ -89,14 +89,6 @@ async function insertTasksAndSteps(
 
 type TacticDocCreator = { id: string; role: string; manager_id: string | null }
 
-/** Direct line manager of the employee who created the TACTIC. */
-export async function canManagerReviewEmployeeTacticDoc(
-  managerId: string,
-  creator: TacticDocCreator,
-): Promise<boolean> {
-  return creator.role === 'employee' && creator.manager_id === managerId
-}
-
 async function assertCanReviewTacticDoc(
   profile: Profile,
   creator: TacticDocCreator,
@@ -108,8 +100,7 @@ async function assertCanReviewTacticDoc(
   }
 
   if (profile.role === 'manager') {
-    const allowed = await canManagerReviewEmployeeTacticDoc(profile.id, creator)
-    if (!allowed)
+    if (creator.role !== 'employee' || creator.manager_id !== profile.id)
       throw new Error('You are not authorized to review this TACTIC')
     return
   }
@@ -188,8 +179,7 @@ export async function createTacticDocument(
 
   await insertTasksAndSteps(doc.id, input.tasks, input.next_steps)
 
-  // Log activity
-  await supabase.from('activity_logs').insert({
+  await supabaseAdmin.from('activity_logs').insert({
     employee_id: profile.id,
     action: status === 'submitted' ? 'tactic_doc.submitted' : 'tactic_doc.created',
     meta: { entity_type: 'tactic_document', entity_id: doc.id, entity_code: doc.code },
@@ -425,7 +415,7 @@ export interface TacticDocShareRow {
 }
 
 export async function getTacticDocumentShares(docId: string): Promise<TacticDocShareRow[]> {
-  const profile  = await requireProfile()
+  const profile = await requireProfile()
   const supabase = await createClient()
 
   const { data: doc } = await supabase
@@ -438,7 +428,7 @@ export async function getTacticDocumentShares(docId: string): Promise<TacticDocS
   if (doc.created_by !== profile.id && profile.role !== 'admin')
     throw new Error('Not authorized')
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('tactic_document_shares')
     .select(`
       id, shared_with, created_at,
@@ -447,7 +437,10 @@ export async function getTacticDocumentShares(docId: string): Promise<TacticDocS
     .eq('tactic_document_id', docId)
     .order('created_at', { ascending: false })
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (error.message.includes('tactic_document_shares')) return []
+    throw new Error(error.message)
+  }
   return (data ?? []) as unknown as TacticDocShareRow[]
 }
 
@@ -465,14 +458,14 @@ export async function getShareableUsers(docId: string) {
   if (doc.created_by !== profile.id)
     throw new Error('Only the owner can share this TACTIC')
 
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from('tactic_document_shares')
     .select('shared_with')
     .eq('tactic_document_id', docId)
 
   const alreadyShared = new Set((existing ?? []).map(r => r.shared_with))
 
-  const { data: users, error } = await supabase
+  const { data: users, error } = await supabaseAdmin
     .from('profiles')
     .select('id, full_name, employee_code, role')
     .eq('status', 'active')
@@ -511,7 +504,7 @@ export async function shareTacticDocument(docId: string, userId: string) {
   if (!target || target.status !== 'active')
     throw new Error('User not found')
 
-  const { error } = await supabase.from('tactic_document_shares').insert({
+  const { error } = await supabaseAdmin.from('tactic_document_shares').insert({
     tactic_document_id: docId,
     shared_with:        userId,
     shared_by:          profile.id,
@@ -547,7 +540,7 @@ export async function unshareTacticDocument(docId: string, shareId: string) {
   if (doc.created_by !== profile.id && profile.role !== 'admin')
     throw new Error('Not authorized')
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('tactic_document_shares')
     .delete()
     .eq('id', shareId)

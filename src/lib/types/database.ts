@@ -768,6 +768,49 @@ export type Database = {
         ]
       }
 
+      tactic_document_shares: {
+        Row: {
+          id:                 string
+          tactic_document_id: string
+          shared_with:        string
+          shared_by:          string
+          created_at:         string
+        }
+        Insert: {
+          id?:                 string
+          tactic_document_id: string
+          shared_with:        string
+          shared_by:          string
+          created_at?:         string
+        }
+        Update: {
+          id?:                 string
+          tactic_document_id?: string
+          shared_with?:        string
+          shared_by?:          string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tactic_document_shares_tactic_document_id_fkey'
+            columns: ['tactic_document_id']
+            referencedRelation: 'tactic_documents'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_document_shares_shared_with_fkey'
+            columns: ['shared_with']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_document_shares_shared_by_fkey'
+            columns: ['shared_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       tactic_tasks: {
         Row: {
           id: string
