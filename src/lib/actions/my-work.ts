@@ -6,6 +6,7 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { parseExcelBuffer } from '@/lib/my-work/parse-excel'
+import { parseDocumentBuffer } from '@/lib/my-work/parse-document'
 import type {
   WorkSheet,
   WorkSheetRow,
@@ -346,6 +347,47 @@ export async function uploadWorkSheetExcel(formData: FormData): Promise<WorkShee
       blocks:        [],
       source_filename: file.name,
       folder_id:     typeof folderRaw === 'string' && folderRaw ? folderRaw : null,
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  revalidateMyWork()
+  return parseSheetRow(data)
+}
+
+// ── Upload Document (Word .docx / .txt) ───────────────────────────────────────
+
+export async function uploadWorkSheetDocument(formData: FormData): Promise<WorkSheet> {
+  const profile   = await requireProfile()
+  const file      = formData.get('file')
+  const nameRaw   = formData.get('name')
+  const folderRaw = formData.get('folderId')
+
+  if (!(file instanceof File)) throw new Error('No file provided')
+  if (!/\.(docx|txt)$/i.test(file.name)) {
+    throw new Error('Please upload a Word document (.docx) or text file (.txt)')
+  }
+
+  const buffer = await file.arrayBuffer()
+  const blocks = await parseDocumentBuffer(buffer, file.name)
+
+  const name = (typeof nameRaw === 'string' && nameRaw.trim())
+    ? nameRaw.trim()
+    : file.name.replace(/\.(docx|txt)$/i, '')
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('employee_work_sheets')
+    .insert({
+      employee_id:     profile.id,
+      name,
+      sheet_type:      'document',
+      columns:         [],
+      rows:            [],
+      blocks,
+      source_filename: file.name,
+      folder_id:       typeof folderRaw === 'string' && folderRaw ? folderRaw : null,
     })
     .select()
     .single()

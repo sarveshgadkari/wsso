@@ -3,7 +3,7 @@
 import { useState, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, Upload, Table2, FileSpreadsheet, FileText, LayoutTemplate, Users,
+  Plus, Upload, FileUp, Table2, FileSpreadsheet, FileText, LayoutTemplate, Users,
   FolderPlus, Folder, ChevronDown, ChevronRight, Pencil, Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input'
 import { useToast } from '@/lib/store/toast'
 import {
   uploadWorkSheetExcel,
+  uploadWorkSheetDocument,
   createBlankWorkSheet,
   createDocumentWorkSheet,
   createWorkSheetFolder,
@@ -103,6 +104,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
   const [folders, setFolders]       = useState(initialFolders)
   const [selectedId, setSelectedId] = useState(initialSheets[0]?.id ?? '')
   const [uploadOpen, setUploadOpen]   = useState(false)
+  const [docUploadOpen, setDocUploadOpen] = useState(false)
   const [gridOpen, setGridOpen]       = useState(false)
   const [docOpen, setDocOpen]         = useState(false)
   const [folderOpen, setFolderOpen]   = useState(false)
@@ -111,11 +113,13 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
   const [collapsed, setCollapsed]     = useState<Set<string>>(new Set())
   const [sheetName, setSheetName]     = useState('')
   const [file, setFile]               = useState<File | null>(null)
+  const [docFile, setDocFile]         = useState<File | null>(null)
   const [targetFolderId, setTargetFolderId] = useState<string | null>(null)
   const [menuFolderId, setMenuFolderId]     = useState<string | null>(null)
   const [shareFolder, setShareFolder]       = useState<WorkSheetFolder | null>(null)
   const [isPending, start]            = useTransition()
   const fileRef = useRef<HTMLInputElement>(null)
+  const docFileRef = useRef<HTMLInputElement>(null)
 
   const selected = sheets.find(s => s.id === selectedId) ?? sheets[0]
 
@@ -217,6 +221,33 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
     })
   }
 
+  const handleUploadDocument = () => {
+    if (!docFile) return
+    const fd = new FormData()
+    fd.append('file', docFile)
+    if (sheetName.trim()) fd.append('name', sheetName.trim())
+    if (targetFolderId) fd.append('folderId', targetFolderId)
+
+    start(async () => {
+      try {
+        const sheet = await uploadWorkSheetDocument(fd)
+        const withAccess: WorkSheetWithAccess = {
+          ...sheet,
+          access: { isOwner: true, canEdit: true, shareCount: 0 },
+        }
+        setSheets(prev => [withAccess, ...prev])
+        setSelectedId(withAccess.id)
+        setDocUploadOpen(false)
+        setDocFile(null)
+        setSheetName('')
+        if (docFileRef.current) docFileRef.current.value = ''
+        toast.success(`Imported "${sheet.name}"`)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Upload failed')
+      }
+    })
+  }
+
   const handleCreateGrid = () => {
     start(async () => {
       try {
@@ -255,14 +286,16 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
     })
   }
 
-  const openCreate = (folderId: string | null, type: 'upload' | 'doc' | 'grid') => {
+  const openCreate = (folderId: string | null, type: 'upload' | 'docUpload' | 'doc' | 'grid') => {
     setTargetFolderId(folderId)
     setMenuFolderId(null)
     setSheetName('')
     setFile(null)
-    if (type === 'upload') setUploadOpen(true)
-    if (type === 'doc')    setDocOpen(true)
-    if (type === 'grid')   setGridOpen(true)
+    setDocFile(null)
+    if (type === 'upload')    setUploadOpen(true)
+    if (type === 'docUpload') setDocUploadOpen(true)
+    if (type === 'doc')       setDocOpen(true)
+    if (type === 'grid')      setGridOpen(true)
   }
 
   const targetFolderName = folders.find(f => f.id === targetFolderId)?.name ?? null
@@ -355,6 +388,13 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
                     </button>
                     <button
                       type="button"
+                      onClick={() => openCreate(folder.id, 'docUpload')}
+                      className="flex items-center gap-2 rounded px-2 py-1 text-left text-xs text-neutral-600 hover:bg-white"
+                    >
+                      <FileUp className="h-3 w-3" /> Upload Document
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => openCreate(folder.id, 'doc')}
                       className="flex items-center gap-2 rounded px-2 py-1 text-left text-xs text-neutral-600 hover:bg-white"
                     >
@@ -438,6 +478,14 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
               variant="secondary"
               size="sm"
               className="w-full justify-start"
+              onClick={() => openCreate(null, 'docUpload')}
+            >
+              <FileUp className="h-3.5 w-3.5" /> Upload Document
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full justify-start"
               onClick={() => openCreate(null, 'doc')}
             >
               <LayoutTemplate className="h-3.5 w-3.5" /> New Notion page
@@ -498,6 +546,9 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
               <Button onClick={() => openCreate(null, 'upload')}>
                 <Upload className="h-4 w-4" /> Upload Excel
               </Button>
+              <Button variant="secondary" onClick={() => openCreate(null, 'docUpload')}>
+                <FileUp className="h-4 w-4" /> Upload Document
+              </Button>
               <Button variant="secondary" onClick={() => openCreate(null, 'doc')}>
                 <LayoutTemplate className="h-4 w-4" /> Notion page
               </Button>
@@ -534,6 +585,38 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
         <DialogFooter>
           <Button variant="secondary" onClick={() => setUploadOpen(false)}>Cancel</Button>
           <Button loading={isPending} disabled={!file} onClick={handleUpload}>Upload</Button>
+        </DialogFooter>
+      </Dialog>
+
+      <Dialog open={docUploadOpen} onClose={() => setDocUploadOpen(false)} title="Upload Document">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-neutral-600">
+            Import a Word document (.docx) or text file (.txt). It opens as an editable Notion-style
+            page so you can keep working on it right here in WSSO.
+          </p>
+          {targetFolderName && (
+            <p className="text-xs text-neutral-400">Creating in folder <strong>{targetFolderName}</strong></p>
+          )}
+          <Input
+            label="Name (optional)"
+            placeholder="Onboarding guide"
+            value={sheetName}
+            onChange={e => setSheetName(e.target.value)}
+          />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Document file</label>
+            <input
+              ref={docFileRef}
+              type="file"
+              accept=".docx,.txt"
+              className="block w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700"
+              onChange={e => setDocFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setDocUploadOpen(false)}>Cancel</Button>
+          <Button loading={isPending} disabled={!docFile} onClick={handleUploadDocument}>Upload</Button>
         </DialogFooter>
       </Dialog>
 
