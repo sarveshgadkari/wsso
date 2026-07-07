@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
+import { memo, useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import {
   Plus, Trash2, Save, ExternalLink,
@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
+import { Select } from '@/components/ui/Select'
 import { useToast } from '@/lib/store/toast'
 import {
   updateWorkSheet,
@@ -35,6 +36,8 @@ function newRow(columns: string[]): WorkSheetRow {
 }
 
 const WRAP_PREF_KEY = 'wsso:my-work:wrap-text'
+const LARGE_SHEET_THRESHOLD = 100
+const ROW_PAGE_SIZE = 80
 
 const MIN_COL_WIDTH     = 60
 const MAX_COL_WIDTH     = 900
@@ -45,6 +48,137 @@ function autoSize(el: HTMLTextAreaElement | null) {
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
 }
+
+function colStyle(colWidths: Record<string, number>, col: string) {
+  const w = colWidths[col]
+  return w ? { width: w, minWidth: w, maxWidth: w } : undefined
+}
+
+interface GridRowProps {
+  row:          WorkSheetRow
+  rowIdx:       number
+  columns:      string[]
+  colWidths:    Record<string, number>
+  wrapText:     boolean
+  canEdit:      boolean
+  isPending:    boolean
+  linked:       WorkOrderOption | undefined
+  onUpdateCell: (rowId: string, col: string, value: string) => void
+  onRemoveRow:  (rowId: string) => void
+  onLinkClick:  (rowId: string) => void
+  onCreateWO:   (rowId: string) => void
+}
+
+const GridRow = memo(function GridRow({
+  row,
+  rowIdx,
+  columns,
+  colWidths,
+  wrapText,
+  canEdit,
+  isPending,
+  linked,
+  onUpdateCell,
+  onRemoveRow,
+  onLinkClick,
+  onCreateWO,
+}: GridRowProps) {
+  return (
+    <tr className="group/row">
+      <td className="relative border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none">
+        {canEdit ? (
+          <>
+            <span className="group-hover/row:invisible">{rowIdx + 1}</span>
+            <button
+              type="button"
+              onClick={() => onRemoveRow(row.id)}
+              className="absolute inset-0 flex items-center justify-center text-danger-500 opacity-0 transition-opacity hover:bg-danger-50 group-hover/row:opacity-100"
+              title="Delete row"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          rowIdx + 1
+        )}
+      </td>
+      {columns.map(col => (
+        <td key={col} style={colStyle(colWidths, col)} className="border border-neutral-300 p-0 align-top">
+          {wrapText ? (
+            <textarea
+              rows={1}
+              readOnly={!canEdit}
+              className={cn(
+                'block w-full resize-none overflow-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-2.5 py-1.5 text-sm leading-snug focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
+                !colWidths[col] && 'min-w-[140px] max-w-[420px]',
+                !canEdit && 'cursor-default',
+              )}
+              value={row.cells[col] ?? ''}
+              onFocus={e => autoSize(e.currentTarget)}
+              onChange={e => {
+                onUpdateCell(row.id, col, e.target.value)
+                autoSize(e.target)
+              }}
+            />
+          ) : (
+            <input
+              readOnly={!canEdit}
+              className={cn(
+                'block w-full border-0 bg-transparent px-2.5 py-1.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
+                !colWidths[col] && 'min-w-[140px]',
+                !canEdit && 'cursor-default',
+              )}
+              value={row.cells[col] ?? ''}
+              onChange={e => onUpdateCell(row.id, col, e.target.value)}
+            />
+          )}
+        </td>
+      ))}
+      <td className="border border-neutral-300 p-2 align-top">
+        <div className="flex min-w-[120px] flex-col gap-1">
+          {linked ? (
+            <Link
+              href={`/tactics/${linked.id}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline"
+            >
+              {linked.code}
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          ) : (
+            <span className="text-xs text-neutral-300">—</span>
+          )}
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 justify-start px-1 text-xs"
+              onClick={() => onLinkClick(row.id)}
+              disabled={isPending}
+            >
+              <Link2 className="h-3 w-3" />
+              {linked ? 'Change link' : 'Link…'}
+            </Button>
+          )}
+        </div>
+      </td>
+      <td className="border border-neutral-300 p-2 align-top">
+        {canEdit ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 justify-start px-2 text-xs"
+            onClick={() => onCreateWO(row.id)}
+            disabled={isPending}
+            title="Create work order from this row"
+          >
+            <ClipboardPlus className="h-3.5 w-3.5" />
+            Create WO
+          </Button>
+        ) : null}
+      </td>
+    </tr>
+  )
+})
 
 export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onSheetDelete, onShareChange }: Props) {
   const toast = useToast()
@@ -58,21 +192,37 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
   const [wrapText, setWrapText] = useState(false)
   const [editingCol, setEditingCol] = useState<string | null>(null)
   const [editingColName, setEditingColName] = useState('')
+  const [linkRowId, setLinkRowId] = useState<string | null>(null)
+  const [linkTacticId, setLinkTacticId] = useState('')
+  const [visibleRowCount, setVisibleRowCount] = useState(ROW_PAGE_SIZE)
+
+  const isLargeSheet = rows.length > LARGE_SHEET_THRESHOLD
+  const wrapAllowed  = !isLargeSheet
+  const effectiveWrap = wrapText && wrapAllowed
+  const displayRows  = isLargeSheet ? rows.slice(0, visibleRowCount) : rows
 
   useEffect(() => {
     setColumns(sheet.columns)
     setRows(sheet.rows)
     setDirty(false)
     setEditingCol(null)
+    setVisibleRowCount(ROW_PAGE_SIZE)
   }, [sheet.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load the saved preference after mount to avoid SSR hydration mismatch.
-  // Wrapping defaults to on unless the user explicitly turned it off.
+  // Wrap defaults off for performance; large sheets never use wrap.
   useEffect(() => {
-    setWrapText(localStorage.getItem(WRAP_PREF_KEY) !== '0')
-  }, [])
+    if (sheet.rows.length > LARGE_SHEET_THRESHOLD) {
+      setWrapText(false)
+      return
+    }
+    setWrapText(localStorage.getItem(WRAP_PREF_KEY) === '1')
+  }, [sheet.id, sheet.rows.length])
 
   const toggleWrap = () => {
+    if (!wrapAllowed) {
+      toast.error(`Wrap is disabled for sheets with more than ${LARGE_SHEET_THRESHOLD} rows`)
+      return
+    }
     setWrapText(prev => {
       const next = !prev
       localStorage.setItem(WRAP_PREF_KEY, next ? '1' : '0')
@@ -80,7 +230,6 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
     })
   }
 
-  // Column widths, resizable by dragging header edges (persisted per sheet).
   const widthsKey = `wsso:my-work:col-widths:${sheet.id}`
   const [colWidths, setColWidths] = useState<Record<string, number>>({})
   const colWidthsRef = useRef(colWidths)
@@ -116,36 +265,24 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
     document.addEventListener('pointerup', onUp)
   }
 
-  const colStyle = (col: string) => {
-    const w = colWidths[col]
-    return w ? { width: w, minWidth: w, maxWidth: w } : undefined
-  }
-
-  // Re-fit wrapped cell heights whenever column widths change (live during drag).
-  const tableRef = useRef<HTMLTableElement>(null)
-  useEffect(() => {
-    if (!wrapText) return
-    tableRef.current?.querySelectorAll('textarea').forEach(autoSize)
-  }, [colWidths, wrapText])
-
   const markDirty = useCallback(() => setDirty(true), [])
 
-  const updateCell = (rowId: string, col: string, value: string) => {
+  const updateCell = useCallback((rowId: string, col: string, value: string) => {
     setRows(prev => prev.map(r =>
       r.id === rowId ? { ...r, cells: { ...r.cells, [col]: value } } : r,
     ))
     markDirty()
-  }
+  }, [markDirty])
 
   const addRow = () => {
     setRows(prev => [...prev, newRow(columns)])
     markDirty()
   }
 
-  const removeRow = (rowId: string) => {
+  const removeRow = useCallback((rowId: string) => {
     setRows(prev => prev.filter(r => r.id !== rowId))
     markDirty()
-  }
+  }, [markDirty])
 
   const addColumn = () => {
     const name = `Column ${columns.length + 1}`
@@ -224,7 +361,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
     })
   }
 
-  const handleCreateWO = (rowId: string) => {
+  const handleCreateWO = useCallback((rowId: string) => {
     start(async () => {
       try {
         if (dirty) {
@@ -240,21 +377,26 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
         toast.error(e instanceof Error ? e.message : 'Failed to create work order')
       }
     })
-  }
+  }, [columns, dirty, onSheetChange, rows, sheet.id, start, toast])
 
-  const handleLinkWO = (rowId: string, tacticId: string) => {
+  const openLinkDialog = useCallback((rowId: string) => {
+    const row = rows.find(r => r.id === rowId)
+    setLinkRowId(rowId)
+    setLinkTacticId(row?.tactic_id ?? '')
+  }, [rows])
+
+  const confirmLinkWO = () => {
+    if (!linkRowId) return
+    const rowId = linkRowId
     start(async () => {
       try {
         if (dirty) await updateWorkSheet(sheet.id, { columns, rows })
-        const updatedRows = await linkRowToWorkOrder(
-          sheet.id,
-          rowId,
-          tacticId || null,
-        )
+        const updatedRows = await linkRowToWorkOrder(sheet.id, rowId, linkTacticId || null)
         setRows(updatedRows)
         setDirty(false)
         onSheetChange({ ...sheet, columns, rows: updatedRows })
-        toast.success(tacticId ? 'Linked to work order' : 'Link removed')
+        setLinkRowId(null)
+        toast.success(linkTacticId ? 'Linked to work order' : 'Link removed')
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Link failed')
       }
@@ -274,8 +416,8 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
     })
   }
 
-  const linkedTactic = (id: string | null | undefined) =>
-    workOrders.find(t => t.id === id)
+  const workOrderById = useRef(new Map<string, WorkOrderOption>())
+  workOrderById.current = new Map(workOrders.map(t => [t.id, t]))
 
   return (
     <div className="flex flex-col gap-4">
@@ -284,6 +426,11 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
           <h3 className="text-lg font-semibold text-neutral-900">{sheet.name}</h3>
           {sheet.source_filename && (
             <p className="text-xs text-neutral-400">Imported from {sheet.source_filename}</p>
+          )}
+          {isLargeSheet && (
+            <p className="mt-1 text-xs text-amber-600">
+              Large sheet ({rows.length.toLocaleString()} rows) — showing {displayRows.length.toLocaleString()} at a time for speed.
+            </p>
           )}
           {!access.isOwner && access.ownerName && (
             <p className="mt-0.5 text-xs text-primary-600">
@@ -316,8 +463,16 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
                 variant="secondary"
                 size="sm"
                 onClick={toggleWrap}
-                className={cn(wrapText && 'border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100')}
-                title={wrapText ? 'Show each cell on a single line' : 'Wrap long text inside cells (like Excel)'}
+                disabled={!wrapAllowed}
+                className={cn(
+                  effectiveWrap && 'border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100',
+                  !wrapAllowed && 'opacity-50',
+                )}
+                title={
+                  wrapAllowed
+                    ? effectiveWrap ? 'Show each cell on a single line' : 'Wrap long text inside cells (like Excel)'
+                    : `Disabled for sheets over ${LARGE_SHEET_THRESHOLD} rows`
+                }
               >
                 <WrapText className="h-3.5 w-3.5" /> Wrap
               </Button>
@@ -341,7 +496,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
       </div>
 
       <div className="card overflow-x-auto">
-        <table ref={tableRef} className="min-w-full border-collapse text-sm">
+        <table className="min-w-full border-collapse text-sm">
           <thead>
             <tr>
               <th className="w-10 border border-neutral-300 bg-neutral-100 px-2 py-1.5 text-center text-xs font-semibold text-neutral-400 select-none">
@@ -350,7 +505,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
               {columns.map(col => (
                 <th
                   key={col}
-                  style={colStyle(col)}
+                  style={colStyle(colWidths, col)}
                   className={cn(
                     'relative border border-neutral-300 bg-neutral-100 px-1 py-1.5 text-left text-xs font-semibold text-neutral-600',
                     !colWidths[col] && 'min-w-[140px]',
@@ -418,111 +573,65 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
                   No rows yet — click <strong>Add Row</strong> or edit cells after import.
                 </td>
               </tr>
-            ) : rows.map((row, rowIdx) => {
-              const linked = linkedTactic(row.tactic_id)
-              return (
-                <tr key={row.id} className="group/row">
-                  <td className="relative border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none">
-                    {canEdit ? (
-                      <>
-                        <span className="group-hover/row:invisible">{rowIdx + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeRow(row.id)}
-                          className="absolute inset-0 flex items-center justify-center text-danger-500 opacity-0 transition-opacity hover:bg-danger-50 group-hover/row:opacity-100"
-                          title="Delete row"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      rowIdx + 1
-                    )}
-                  </td>
-                  {columns.map(col => (
-                    <td key={col} style={colStyle(col)} className="border border-neutral-300 p-0 align-top">
-                      {wrapText ? (
-                        <textarea
-                          ref={autoSize}
-                          rows={1}
-                          readOnly={!canEdit}
-                          className={cn(
-                            'block w-full resize-none overflow-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-2.5 py-1.5 text-sm leading-snug focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
-                            !colWidths[col] && 'min-w-[140px] max-w-[420px]',
-                            !canEdit && 'cursor-default',
-                          )}
-                          value={row.cells[col] ?? ''}
-                          onChange={e => {
-                            updateCell(row.id, col, e.target.value)
-                            autoSize(e.target)
-                          }}
-                        />
-                      ) : (
-                        <input
-                          readOnly={!canEdit}
-                          className={cn(
-                            'block w-full border-0 bg-transparent px-2.5 py-1.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
-                            !colWidths[col] && 'min-w-[140px]',
-                            !canEdit && 'cursor-default',
-                          )}
-                          value={row.cells[col] ?? ''}
-                          onChange={e => updateCell(row.id, col, e.target.value)}
-                        />
-                      )}
-                    </td>
-                  ))}
-                  <td className="border border-neutral-300 p-2 align-top">
-                    <div className="flex min-w-[160px] flex-col gap-1">
-                      {linked ? (
-                        <Link
-                          href={`/tactics/${linked.id}`}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline"
-                        >
-                          {linked.code}
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-neutral-300">—</span>
-                      )}
-                      <select
-                        className="h-8 w-full rounded border border-neutral-200 bg-white px-2 text-xs"
-                        value={row.tactic_id ?? ''}
-                        onChange={e => handleLinkWO(row.id, e.target.value)}
-                        disabled={isPending || !canEdit}
-                      >
-                        <option value="">Link existing…</option>
-                        {workOrders.map(t => (
-                          <option key={t.id} value={t.id}>{t.code} — {t.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </td>
-                  <td className="border border-neutral-300 p-2 align-top">
-                    {canEdit ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 justify-start px-2 text-xs"
-                        onClick={() => handleCreateWO(row.id)}
-                        disabled={isPending}
-                        title="Create work order from this row"
-                      >
-                        <ClipboardPlus className="h-3.5 w-3.5" />
-                        Create WO
-                      </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              )
-            })}
+            ) : displayRows.map((row, rowIdx) => (
+              <GridRow
+                key={row.id}
+                row={row}
+                rowIdx={rowIdx}
+                columns={columns}
+                colWidths={colWidths}
+                wrapText={effectiveWrap}
+                canEdit={canEdit}
+                isPending={isPending}
+                linked={row.tactic_id ? workOrderById.current.get(row.tactic_id) : undefined}
+                onUpdateCell={updateCell}
+                onRemoveRow={removeRow}
+                onLinkClick={openLinkDialog}
+                onCreateWO={handleCreateWO}
+              />
+            ))}
           </tbody>
         </table>
       </div>
 
+      {isLargeSheet && visibleRowCount < rows.length && (
+        <div className="flex justify-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setVisibleRowCount(c => Math.min(c + ROW_PAGE_SIZE, rows.length))}
+          >
+            Load more rows ({displayRows.length.toLocaleString()} of {rows.length.toLocaleString()} shown)
+          </Button>
+        </div>
+      )}
+
       <p className="text-xs text-neutral-400">
         <Link2 className="mr-1 inline h-3 w-3" />
-        Double-click a column header to rename · hover row # or column header to delete · Link a row to a work order or use <strong>Create WO</strong>.
+        Double-click a column header to rename · hover row # or column header to delete · use <strong>Link…</strong> or <strong>Create WO</strong> per row.
       </p>
+
+      <Dialog
+        open={!!linkRowId}
+        onClose={() => setLinkRowId(null)}
+        title="Link row to work order"
+        size="md"
+      >
+        <Select
+          label="Work order"
+          value={linkTacticId}
+          onChange={e => setLinkTacticId(e.target.value)}
+        >
+          <option value="">— No link —</option>
+          {workOrders.map(t => (
+            <option key={t.id} value={t.id}>{t.code} — {t.title}</option>
+          ))}
+        </Select>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setLinkRowId(null)}>Cancel</Button>
+          <Button loading={isPending} onClick={confirmLinkWO}>Save link</Button>
+        </DialogFooter>
+      </Dialog>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete sheet?">
         <p className="text-sm text-neutral-600">
