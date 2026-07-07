@@ -24,6 +24,18 @@ export interface DocBlock {
 
 export type WorkSheetType = 'spreadsheet' | 'document'
 
+/** Sidebar list item — metadata only (no rows/doc content). */
+export interface WorkSheetSummary {
+  id:              string
+  employee_id:     string
+  name:            string
+  sheet_type:      WorkSheetType
+  source_filename: string | null
+  folder_id:       string | null
+  created_at:      string
+  updated_at:      string
+}
+
 export interface WorkSheet {
   id:              string
   employee_id:     string
@@ -74,6 +86,8 @@ export interface WorkSheetAccess {
 }
 
 export type WorkSheetWithAccess = WorkSheet & { access: WorkSheetAccess }
+
+export type WorkSheetListItem = WorkSheetSummary & { access: WorkSheetAccess }
 
 export interface ShareableUser {
   id:            string

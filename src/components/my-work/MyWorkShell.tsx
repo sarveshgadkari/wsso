@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef, useTransition } from 'react'
+import { useState, useRef, useTransition, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import {
   Plus, Upload, FileUp, Table2, FileSpreadsheet, FileText, LayoutTemplate, Users,
-  FolderPlus, Folder, ChevronDown, ChevronRight, Pencil, Trash2,
+  FolderPlus, Folder, ChevronDown, ChevronRight, Pencil, Trash2, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
@@ -19,20 +20,59 @@ import {
   renameWorkSheetFolder,
   deleteWorkSheetFolder,
   moveWorkSheetToFolder,
+  renameWorkSheet,
+  getMyWorkSheet,
 } from '@/lib/actions/my-work'
-import { WorkSheetGrid } from './WorkSheetGrid'
-import { WorkDocumentEditor } from './WorkDocumentEditor'
 import { WorkSheetFolderShareDialog } from './WorkSheetFolderShareDialog'
-import type { WorkSheetWithAccess, WorkOrderOption, WorkSheetFolder } from '@/lib/my-work/types'
+import type {
+  WorkSheetWithAccess,
+  WorkSheetListItem,
+  WorkOrderOption,
+  WorkSheetFolder,
+  WorkSheet,
+} from '@/lib/my-work/types'
 import { cn } from '@/lib/utils'
 
+const WorkSheetGrid = dynamic(
+  () => import('./WorkSheetGrid').then(m => ({ default: m.WorkSheetGrid })),
+  { loading: () => <SheetLoading label="spreadsheet" /> },
+)
+
+const WorkDocumentEditor = dynamic(
+  () => import('./WorkDocumentEditor').then(m => ({ default: m.WorkDocumentEditor })),
+  { loading: () => <SheetLoading label="document" />, ssr: false },
+)
+
+function SheetLoading({ label }: { label: string }) {
+  return (
+    <div className="card flex items-center justify-center gap-2 px-6 py-16 text-sm text-neutral-500">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Loading {label}…
+    </div>
+  )
+}
+
+function toListItem(sheet: WorkSheetWithAccess): WorkSheetListItem {
+  return {
+    id:              sheet.id,
+    employee_id:     sheet.employee_id,
+    name:            sheet.name,
+    sheet_type:      sheet.sheet_type,
+    source_filename: sheet.source_filename,
+    folder_id:       sheet.folder_id,
+    created_at:      sheet.created_at,
+    updated_at:      sheet.updated_at,
+    access:          sheet.access,
+  }
+}
+
 interface Props {
-  initialSheets:  WorkSheetWithAccess[]
+  initialSheets:  WorkSheetListItem[]
   initialFolders: WorkSheetFolder[]
   workOrders:     WorkOrderOption[]
 }
 
-function SheetIcon({ sheet }: { sheet: WorkSheetWithAccess }) {
+function SheetIcon({ sheet }: { sheet: WorkSheetListItem }) {
   if (sheet.sheet_type === 'document') {
     return <FileText className="h-4 w-4 shrink-0 opacity-60" />
   }
@@ -45,12 +85,14 @@ function SheetListItem({
   onSelect,
   folders,
   onMove,
+  onRename,
 }: {
-  sheet: WorkSheetWithAccess
+  sheet: WorkSheetListItem
   selected: boolean
   onSelect: () => void
   folders?: WorkSheetFolder[]
   onMove?: (folderId: string | null) => void
+  onRename?: () => void
 }) {
   return (
     <div
@@ -79,6 +121,16 @@ function SheetListItem({
           {sheet.access.shareCount}
         </span>
       )}
+      {sheet.access.isOwner && onRename && (
+        <button
+          type="button"
+          title="Rename"
+          onClick={e => { e.stopPropagation(); onRename() }}
+          className="hidden shrink-0 rounded p-0.5 text-neutral-400 hover:bg-neutral-100 hover:text-primary-600 group-hover:block"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      )}
       {folders && onMove && (
         <select
           value={sheet.folder_id ?? ''}
@@ -101,8 +153,12 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
   const router = useRouter()
   const toast = useToast()
   const [sheets, setSheets]         = useState(initialSheets)
+  const [sheetCache, setSheetCache] = useState<Record<string, WorkSheetWithAccess>>({})
+  const [loadingSheetId, setLoadingSheetId] = useState<string | null>(null)
   const [folders, setFolders]       = useState(initialFolders)
   const [selectedId, setSelectedId] = useState(initialSheets[0]?.id ?? '')
+  const sheetCacheRef = useRef(sheetCache)
+  sheetCacheRef.current = sheetCache
   const [uploadOpen, setUploadOpen]   = useState(false)
   const [docUploadOpen, setDocUploadOpen] = useState(false)
   const [gridOpen, setGridOpen]       = useState(false)
@@ -110,6 +166,9 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
   const [folderOpen, setFolderOpen]   = useState(false)
   const [renamingFolder, setRenamingFolder] = useState<WorkSheetFolder | null>(null)
   const [folderName, setFolderName]   = useState('')
+  const [sheetRenameOpen, setSheetRenameOpen] = useState(false)
+  const [renamingSheet, setRenamingSheet] = useState<WorkSheetListItem | null>(null)
+  const [renameSheetName, setRenameSheetName] = useState('')
   const [collapsed, setCollapsed]     = useState<Set<string>>(new Set())
   const [sheetName, setSheetName]     = useState('')
   const [file, setFile]               = useState<File | null>(null)
@@ -121,7 +180,37 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
   const fileRef = useRef<HTMLInputElement>(null)
   const docFileRef = useRef<HTMLInputElement>(null)
 
-  const selected = sheets.find(s => s.id === selectedId) ?? sheets[0]
+  const selectedSummary = sheets.find(s => s.id === selectedId)
+  const selectedFull    = selectedId ? sheetCache[selectedId] : undefined
+
+  const loadSheet = useCallback(async (sheetId: string) => {
+    if (sheetCacheRef.current[sheetId]) return
+    setLoadingSheetId(sheetId)
+    try {
+      const sheet = await getMyWorkSheet(sheetId)
+      setSheetCache(prev => ({ ...prev, [sheetId]: sheet }))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load sheet')
+    } finally {
+      setLoadingSheetId(prev => (prev === sheetId ? null : prev))
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (selectedId) void loadSheet(selectedId)
+  }, [selectedId, loadSheet])
+
+  const upsertSheet = useCallback((full: WorkSheetWithAccess) => {
+    setSheetCache(prev => ({ ...prev, [full.id]: full }))
+    setSheets(prev => {
+      const item = toListItem(full)
+      const idx  = prev.findIndex(s => s.id === full.id)
+      if (idx === -1) return [item, ...prev]
+      const next = [...prev]
+      next[idx] = { ...item, access: full.access }
+      return next
+    })
+  }, [])
 
   const ownedSheets  = sheets.filter(s => s.access.isOwner)
   const sharedSheets = sheets.filter(s => !s.access.isOwner)
@@ -132,6 +221,35 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
+    })
+  }
+
+  const openRenameSheet = (sheet: WorkSheetListItem) => {
+    setRenamingSheet(sheet)
+    setRenameSheetName(sheet.name)
+    setSheetRenameOpen(true)
+  }
+
+  const handleSaveSheetRename = () => {
+    const trimmed = renameSheetName.trim()
+    if (!trimmed || !renamingSheet) return
+    start(async () => {
+      try {
+        const updated = await renameWorkSheet(renamingSheet.id, trimmed)
+        setSheets(prev => prev.map(s =>
+          s.id === updated.id ? { ...s, name: updated.name, updated_at: updated.updated_at } : s,
+        ))
+        setSheetCache(prev => {
+          const cached = prev[updated.id]
+          if (!cached) return prev
+          return { ...prev, [updated.id]: { ...cached, name: updated.name, updated_at: updated.updated_at } }
+        })
+        setSheetRenameOpen(false)
+        setRenamingSheet(null)
+        toast.success('File renamed')
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Rename failed')
+      }
     })
   }
 
@@ -194,6 +312,19 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
     })
   }
 
+  const onSheetDelete = (id: string) => {
+    setSheets(prev => {
+      const next = prev.filter(s => s.id !== id)
+      if (selectedId === id) setSelectedId(next[0]?.id ?? '')
+      return next
+    })
+    setSheetCache(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
   const handleUpload = () => {
     if (!file) return
     const fd = new FormData()
@@ -208,7 +339,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
           ...sheet,
           access: { isOwner: true, canEdit: true, shareCount: 0 },
         }
-        setSheets(prev => [withAccess, ...prev])
+        upsertSheet(withAccess)
         setSelectedId(withAccess.id)
         setUploadOpen(false)
         setFile(null)
@@ -235,7 +366,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
           ...sheet,
           access: { isOwner: true, canEdit: true, shareCount: 0 },
         }
-        setSheets(prev => [withAccess, ...prev])
+        upsertSheet(withAccess)
         setSelectedId(withAccess.id)
         setDocUploadOpen(false)
         setDocFile(null)
@@ -256,7 +387,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
           ...sheet,
           access: { isOwner: true, canEdit: true, shareCount: 0 },
         }
-        setSheets(prev => [withAccess, ...prev])
+        upsertSheet(withAccess)
         setSelectedId(withAccess.id)
         setGridOpen(false)
         setSheetName('')
@@ -275,7 +406,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
           ...sheet,
           access: { isOwner: true, canEdit: true, shareCount: 0 },
         }
-        setSheets(prev => [withAccess, ...prev])
+        upsertSheet(withAccess)
         setSelectedId(withAccess.id)
         setDocOpen(false)
         setSheetName('')
@@ -300,13 +431,18 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
 
   const targetFolderName = folders.find(f => f.id === targetFolderId)?.name ?? null
 
-  const onSheetDelete = (id: string) => {
-    setSheets(prev => {
-      const next = prev.filter(s => s.id !== id)
-      if (selectedId === id) setSelectedId(next[0]?.id ?? '')
-      return next
+  const handleSheetChange = useCallback((updated: WorkSheet) => {
+    setSheetCache(prev => {
+      const existing = prev[updated.id]
+      if (!existing) return prev
+      return { ...prev, [updated.id]: { ...updated, access: existing.access } }
     })
-  }
+    setSheets(prev => prev.map(s =>
+      s.id === updated.id
+        ? { ...s, name: updated.name, updated_at: updated.updated_at, sheet_type: updated.sheet_type }
+        : s,
+    ))
+  }, [])
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -415,10 +551,11 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
                       <li key={s.id}>
                         <SheetListItem
                           sheet={s}
-                          selected={selected?.id === s.id}
+                          selected={selectedSummary?.id === s.id}
                           onSelect={() => setSelectedId(s.id)}
                           folders={folders}
                           onMove={folderId => handleMoveSheet(s.id, folderId)}
+                          onRename={() => openRenameSheet(s)}
                         />
                       </li>
                     ))}
@@ -436,10 +573,11 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
               <li key={s.id}>
                 <SheetListItem
                   sheet={s}
-                  selected={selected?.id === s.id}
+                  selected={selectedSummary?.id === s.id}
                   onSelect={() => setSelectedId(s.id)}
                   folders={folders}
                   onMove={folderId => handleMoveSheet(s.id, folderId)}
+                  onRename={() => openRenameSheet(s)}
                 />
               </li>
             ))}
@@ -457,7 +595,7 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
                   <li key={s.id}>
                     <SheetListItem
                       sheet={s}
-                      selected={selected?.id === s.id}
+                      selected={selectedSummary?.id === s.id}
                       onSelect={() => setSelectedId(s.id)}
                     />
                   </li>
@@ -503,35 +641,31 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
       </aside>
 
       <div className="min-w-0 flex-1">
-        {selected ? (
-          selected.sheet_type === 'document' ? (
+        {selectedSummary && loadingSheetId === selectedId && !selectedFull ? (
+          <SheetLoading label={selectedSummary.sheet_type === 'document' ? 'document' : 'spreadsheet'} />
+        ) : selectedFull ? (
+          selectedFull.sheet_type === 'document' ? (
             <WorkDocumentEditor
-              key={selected.id}
-              sheet={selected}
-              access={selected.access}
-              onSheetChange={updated => {
-                setSheets(prev => prev.map(s =>
-                  s.id === updated.id ? { ...s, ...updated } : s,
-                ))
-              }}
+              key={selectedFull.id}
+              sheet={selectedFull}
+              access={selectedFull.access}
+              onSheetChange={handleSheetChange}
               onSheetDelete={onSheetDelete}
               onShareChange={refreshShares}
             />
           ) : (
             <WorkSheetGrid
-              key={selected.id}
-              sheet={selected}
-              access={selected.access}
+              key={selectedFull.id}
+              sheet={selectedFull}
+              access={selectedFull.access}
               workOrders={workOrders}
-              onSheetChange={updated => {
-                setSheets(prev => prev.map(s =>
-                  s.id === updated.id ? { ...s, ...updated } : s,
-                ))
-              }}
+              onSheetChange={handleSheetChange}
               onSheetDelete={onSheetDelete}
               onShareChange={refreshShares}
             />
           )
+        ) : selectedSummary ? (
+          <SheetLoading label={selectedSummary.sheet_type === 'document' ? 'document' : 'spreadsheet'} />
         ) : (
           <div className="card flex flex-col items-center gap-4 px-6 py-16 text-center">
             <Table2 className="h-12 w-12 text-neutral-300" />
@@ -652,6 +786,28 @@ export function MyWorkShell({ initialSheets, initialFolders, workOrders }: Props
         <DialogFooter>
           <Button variant="secondary" onClick={() => setGridOpen(false)}>Cancel</Button>
           <Button loading={isPending} onClick={handleCreateGrid}>Create</Button>
+        </DialogFooter>
+      </Dialog>
+
+      <Dialog
+        open={sheetRenameOpen}
+        onClose={() => { setSheetRenameOpen(false); setRenamingSheet(null) }}
+        title="Rename file"
+      >
+        <Input
+          label="File name"
+          placeholder="e.g. Funding matrix"
+          value={renameSheetName}
+          onChange={e => setRenameSheetName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSaveSheetRename() }}
+        />
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => { setSheetRenameOpen(false); setRenamingSheet(null) }}>
+            Cancel
+          </Button>
+          <Button loading={isPending} disabled={!renameSheetName.trim()} onClick={handleSaveSheetRename}>
+            Save
+          </Button>
         </DialogFooter>
       </Dialog>
 

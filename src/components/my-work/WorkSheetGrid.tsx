@@ -43,6 +43,10 @@ const MIN_COL_WIDTH     = 60
 const MAX_COL_WIDTH     = 900
 const DEFAULT_COL_WIDTH = 160
 
+const MIN_ROW_HEIGHT     = 28
+const MAX_ROW_HEIGHT     = 400
+const DEFAULT_ROW_HEIGHT = 36
+
 function autoSize(el: HTMLTextAreaElement | null) {
   if (!el) return
   el.style.height = 'auto'
@@ -54,11 +58,17 @@ function colStyle(colWidths: Record<string, number>, col: string) {
   return w ? { width: w, minWidth: w, maxWidth: w } : undefined
 }
 
+function rowStyle(rowHeights: Record<string, number>, rowId: string) {
+  const h = rowHeights[rowId]
+  return h ? { height: h, minHeight: h } : undefined
+}
+
 interface GridRowProps {
   row:          WorkSheetRow
   rowIdx:       number
   columns:      string[]
   colWidths:    Record<string, number>
+  rowHeights:   Record<string, number>
   wrapText:     boolean
   canEdit:      boolean
   isPending:    boolean
@@ -67,6 +77,7 @@ interface GridRowProps {
   onRemoveRow:  (rowId: string) => void
   onLinkClick:  (rowId: string) => void
   onCreateWO:   (rowId: string) => void
+  onResizeRow:  (rowId: string, e: React.PointerEvent) => void
 }
 
 const GridRow = memo(function GridRow({
@@ -74,6 +85,7 @@ const GridRow = memo(function GridRow({
   rowIdx,
   columns,
   colWidths,
+  rowHeights,
   wrapText,
   canEdit,
   isPending,
@@ -82,10 +94,17 @@ const GridRow = memo(function GridRow({
   onRemoveRow,
   onLinkClick,
   onCreateWO,
+  onResizeRow,
 }: GridRowProps) {
+  const fixedRowHeight = rowHeights[row.id] != null
+  const trStyle = rowStyle(rowHeights, row.id)
+
   return (
-    <tr className="group/row">
-      <td className="relative border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none">
+    <tr className="group/row" style={trStyle}>
+      <td
+        style={trStyle}
+        className="relative border border-neutral-300 bg-neutral-50 px-2 py-1.5 text-center align-top text-xs text-neutral-400 select-none"
+      >
         {canEdit ? (
           <>
             <span className="group-hover/row:invisible">{rowIdx + 1}</span>
@@ -101,23 +120,33 @@ const GridRow = memo(function GridRow({
         ) : (
           rowIdx + 1
         )}
+        {canEdit && (
+          <div
+            onPointerDown={e => onResizeRow(row.id, e)}
+            className="absolute -bottom-[3px] left-0 right-0 z-10 h-1.5 cursor-row-resize touch-none select-none hover:bg-primary-400/70 active:bg-primary-500"
+            title="Drag to resize row"
+          />
+        )}
       </td>
       {columns.map(col => (
-        <td key={col} style={colStyle(colWidths, col)} className="border border-neutral-300 p-0 align-top">
+        <td key={col} style={{ ...colStyle(colWidths, col), ...trStyle }} className="border border-neutral-300 p-0 align-top">
           {wrapText ? (
             <textarea
               rows={1}
               readOnly={!canEdit}
               className={cn(
-                'block w-full resize-none overflow-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-2.5 py-1.5 text-sm leading-snug focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
-                !colWidths[col] && 'min-w-[140px] max-w-[420px]',
+                'block w-full resize-none border-0 bg-transparent px-2.5 py-1.5 text-sm leading-snug focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
+                fixedRowHeight
+                  ? 'h-full min-h-0 overflow-auto whitespace-pre-wrap break-words'
+                  : 'overflow-hidden whitespace-pre-wrap break-words',
+                !colWidths[col] && !fixedRowHeight && 'min-w-[140px] max-w-[420px]',
                 !canEdit && 'cursor-default',
               )}
               value={row.cells[col] ?? ''}
-              onFocus={e => autoSize(e.currentTarget)}
+              onFocus={e => { if (!fixedRowHeight) autoSize(e.currentTarget) }}
               onChange={e => {
                 onUpdateCell(row.id, col, e.target.value)
-                autoSize(e.target)
+                if (!fixedRowHeight) autoSize(e.target)
               }}
             />
           ) : (
@@ -125,6 +154,7 @@ const GridRow = memo(function GridRow({
               readOnly={!canEdit}
               className={cn(
                 'block w-full border-0 bg-transparent px-2.5 py-1.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500',
+                fixedRowHeight && 'h-full min-h-0',
                 !colWidths[col] && 'min-w-[140px]',
                 !canEdit && 'cursor-default',
               )}
@@ -134,7 +164,7 @@ const GridRow = memo(function GridRow({
           )}
         </td>
       ))}
-      <td className="border border-neutral-300 p-2 align-top">
+      <td style={trStyle} className="border border-neutral-300 p-2 align-top">
         <div className="flex min-w-[120px] flex-col gap-1">
           {linked ? (
             <Link
@@ -161,7 +191,7 @@ const GridRow = memo(function GridRow({
           )}
         </div>
       </td>
-      <td className="border border-neutral-300 p-2 align-top">
+      <td style={trStyle} className="border border-neutral-300 p-2 align-top">
         {canEdit ? (
           <Button
             variant="ghost"
@@ -235,12 +265,24 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
   const colWidthsRef = useRef(colWidths)
   colWidthsRef.current = colWidths
 
+  const heightsKey = `wsso:my-work:row-heights:${sheet.id}`
+  const [rowHeights, setRowHeights] = useState<Record<string, number>>({})
+  const rowHeightsRef = useRef(rowHeights)
+  rowHeightsRef.current = rowHeights
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(widthsKey)
       if (raw) setColWidths(JSON.parse(raw))
     } catch { /* corrupt pref — ignore and use defaults */ }
   }, [widthsKey])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(heightsKey)
+      if (raw) setRowHeights(JSON.parse(raw))
+    } catch { /* corrupt pref — ignore and use defaults */ }
+  }, [heightsKey])
 
   const startResize = (col: string, e: React.PointerEvent) => {
     e.preventDefault()
@@ -265,6 +307,32 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
     document.addEventListener('pointerup', onUp)
   }
 
+  const startRowResize = useCallback((rowId: string, e: React.PointerEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const rowEl = (e.currentTarget as HTMLElement).closest('tr')
+    const startH = rowHeightsRef.current[rowId]
+      ?? rowEl?.getBoundingClientRect().height
+      ?? DEFAULT_ROW_HEIGHT
+    const clamp = (y: number) => Math.max(MIN_ROW_HEIGHT, Math.min(MAX_ROW_HEIGHT, y))
+    document.body.style.cursor = 'row-resize'
+
+    const onMove = (ev: PointerEvent) => {
+      const h = clamp(startH + ev.clientY - startY)
+      setRowHeights(prev => ({ ...prev, [rowId]: h }))
+    }
+    const onUp = (ev: PointerEvent) => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.body.style.cursor = ''
+      const next = { ...rowHeightsRef.current, [rowId]: clamp(startH + ev.clientY - startY) }
+      setRowHeights(next)
+      localStorage.setItem(heightsKey, JSON.stringify(next))
+    }
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }, [heightsKey])
+
   const markDirty = useCallback(() => setDirty(true), [])
 
   const updateCell = useCallback((rowId: string, col: string, value: string) => {
@@ -281,8 +349,15 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
 
   const removeRow = useCallback((rowId: string) => {
     setRows(prev => prev.filter(r => r.id !== rowId))
+    setRowHeights(prev => {
+      if (prev[rowId] === undefined) return prev
+      const next = { ...prev }
+      delete next[rowId]
+      localStorage.setItem(heightsKey, JSON.stringify(next))
+      return next
+    })
     markDirty()
-  }, [markDirty])
+  }, [heightsKey, markDirty])
 
   const addColumn = () => {
     const name = `Column ${columns.length + 1}`
@@ -580,6 +655,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
                 rowIdx={rowIdx}
                 columns={columns}
                 colWidths={colWidths}
+                rowHeights={rowHeights}
                 wrapText={effectiveWrap}
                 canEdit={canEdit}
                 isPending={isPending}
@@ -588,6 +664,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
                 onRemoveRow={removeRow}
                 onLinkClick={openLinkDialog}
                 onCreateWO={handleCreateWO}
+                onResizeRow={startRowResize}
               />
             ))}
           </tbody>
@@ -608,7 +685,7 @@ export function WorkSheetGrid({ sheet, access, workOrders, onSheetChange, onShee
 
       <p className="text-xs text-neutral-400">
         <Link2 className="mr-1 inline h-3 w-3" />
-        Double-click a column header to rename · hover row # or column header to delete · use <strong>Link…</strong> or <strong>Create WO</strong> per row.
+        Double-click a column header to rename · drag column/row edges to resize · hover row # or column header to delete · use <strong>Link…</strong> or <strong>Create WO</strong> per row.
       </p>
 
       <Dialog

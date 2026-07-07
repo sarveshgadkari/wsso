@@ -287,7 +287,8 @@ Your personal workspace for spreadsheets, imported files, and rich-text document
 | Add a column | Toolbar → **Column** |
 | Add a row | Toolbar → **Row** |
 | Delete a row | Hover the row number (**#**) → click the trash icon |
-| Resize a column | Drag the edge of the column header |
+| Resize a column | Drag the right edge of the column header |
+| Resize a row | Drag the bottom edge of the row number (**#**) cell |
 | Wrap text | Toolbar → **Wrap** |
 | Save changes | Toolbar → **Save** |
 
@@ -297,6 +298,8 @@ Your personal workspace for spreadsheets, imported files, and rich-text document
 2. Name the folder.
 3. Drag sheets into folders using the move dropdown on each item.
 4. Expand/collapse folders with the arrow icon.
+5. **Rename a folder:** Hover the folder → click the pencil icon.
+6. **Rename a file:** Hover the file in the sidebar → click the pencil icon.
 
 #### Sharing
 

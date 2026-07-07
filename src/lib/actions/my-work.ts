@@ -12,6 +12,8 @@ import type {
   WorkSheetRow,
   WorkOrderOption,
   WorkSheetWithAccess,
+  WorkSheetListItem,
+  WorkSheetSummary,
   WorkSheetShare,
   ShareableUser,
   WorkSheetFolder,
@@ -19,6 +21,10 @@ import type {
 } from '@/lib/my-work/types'
 
 const MAX_ROWS = 2000
+
+/** Columns fetched for sidebar list — excludes heavy JSONB payloads. */
+const SHEET_LIST_SELECT =
+  'id, employee_id, name, sheet_type, source_filename, folder_id, created_at, updated_at'
 
 function revalidateMyWork() {
   revalidatePath('/my-work')
@@ -34,6 +40,24 @@ function parseSheetRow(raw: unknown): WorkSheet {
     rows:       Array.isArray(s.rows)    ? s.rows    : [],
     blocks:     Array.isArray(s.blocks)  ? s.blocks  : [],
   }
+}
+
+function parseSheetSummary(raw: unknown): WorkSheetSummary {
+  const s = raw as WorkSheetSummary
+  return {
+    id:              s.id,
+    employee_id:     s.employee_id,
+    name:            s.name,
+    sheet_type:      s.sheet_type === 'document' ? 'document' : 'spreadsheet',
+    source_filename: s.source_filename ?? null,
+    folder_id:       s.folder_id ?? null,
+    created_at:      s.created_at,
+    updated_at:      s.updated_at,
+  }
+}
+
+function toListItem(sheet: WorkSheetSummary, access: WorkSheetWithAccess['access']): WorkSheetListItem {
+  return { ...sheet, access }
 }
 
 async function assertSheetAccess(
@@ -114,7 +138,7 @@ async function assertFolderOwner(
 
 // ── List / read ───────────────────────────────────────────────────────────────
 
-export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
+export async function listMyWorkSheets(): Promise<WorkSheetListItem[]> {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
@@ -122,12 +146,12 @@ export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
     await Promise.all([
       supabase
         .from('employee_work_sheets')
-        .select('*')
+        .select(SHEET_LIST_SELECT)
         .eq('employee_id', profile.id)
         .order('updated_at', { ascending: false }),
       supabase
         .from('employee_work_sheet_shares')
-        .select('can_edit, sheet:employee_work_sheets(*)')
+        .select(`can_edit, sheet:employee_work_sheets(${SHEET_LIST_SELECT})`)
         .eq('shared_with', profile.id),
       supabase
         .from('employee_work_sheet_folder_shares')
@@ -163,20 +187,20 @@ export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
     }
   }
 
-  const ownedSheets: WorkSheetWithAccess[] = (owned ?? []).map(s => ({
-    ...parseSheetRow(s),
-    access: {
-      isOwner:     true,
-      canEdit:     true,
-      shareCount:  shareCountMap[s.id] ?? 0,
-    },
-  }))
+  const ownedSheets: WorkSheetListItem[] = (owned ?? []).map(s => {
+    const summary = parseSheetSummary(s)
+    return toListItem(summary, {
+      isOwner:    true,
+      canEdit:    true,
+      shareCount: shareCountMap[summary.id] ?? 0,
+    })
+  })
 
   // Sheets shared directly with me
-  const sharedMap = new Map<string, { sheet: WorkSheet; canEdit: boolean; ownerId: string; viaFolder: string | null }>()
+  const sharedMap = new Map<string, { sheet: WorkSheetSummary; canEdit: boolean; ownerId: string; viaFolder: string | null }>()
   for (const row of shareRows) {
     if (!row.sheet) continue
-    const sheet = parseSheetRow(row.sheet as unknown)
+    const sheet = parseSheetSummary(row.sheet as unknown)
     sharedMap.set(sheet.id, { sheet, canEdit: row.can_edit, ownerId: sheet.employee_id, viaFolder: null })
   }
 
@@ -191,14 +215,14 @@ export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
   if (folderInfoById.size > 0) {
     const { data: folderSheets, error: folderSheetsErr } = await supabase
       .from('employee_work_sheets')
-      .select('*')
+      .select(SHEET_LIST_SELECT)
       .in('folder_id', Array.from(folderInfoById.keys()))
 
     if (folderSheetsErr) {
       console.error('[listMyWorkSheets] folder sheets query failed:', folderSheetsErr.message)
     } else {
       for (const raw of folderSheets ?? []) {
-        const sheet = parseSheetRow(raw)
+        const sheet = parseSheetSummary(raw)
         const info  = folderInfoById.get(sheet.folder_id ?? '')
         if (!info) continue
         const existing = sharedMap.get(sheet.id)
@@ -222,19 +246,77 @@ export async function listMyWorkSheets(): Promise<WorkSheetWithAccess[]> {
     for (const o of owners ?? []) ownerNameMap[o.id] = o.full_name
   }
 
-  const sharedSheets: WorkSheetWithAccess[] = Array.from(sharedMap.values())
-    .map(({ sheet, canEdit, ownerId, viaFolder }) => ({
-      ...sheet,
-      access: {
-        isOwner:    false,
+  const sharedSheets: WorkSheetListItem[] = Array.from(sharedMap.values())
+    .map(({ sheet, canEdit, ownerId, viaFolder }) =>
+      toListItem(sheet, {
+        isOwner:   false,
         canEdit,
-        ownerName:  ownerNameMap[ownerId] ?? null,
+        ownerName: ownerNameMap[ownerId] ?? null,
         viaFolder,
-      },
-    }))
+      }),
+    )
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
 
   return [...ownedSheets, ...sharedSheets]
+}
+
+/** Load full sheet content (rows, doc_html, etc.) when user opens a sheet. */
+export async function getMyWorkSheet(sheetId: string): Promise<WorkSheetWithAccess> {
+  const profile  = await requireProfile()
+  const supabase = await createClient()
+
+  const access = await assertSheetAccess(supabase, sheetId, profile.id)
+
+  const { data: raw, error } = await supabase
+    .from('employee_work_sheets')
+    .select('*')
+    .eq('id', sheetId)
+    .maybeSingle()
+
+  if (error || !raw) throw new Error('Sheet not found')
+
+  const sheet = parseSheetRow(raw)
+
+  if (access.isOwner) {
+    const { count } = await supabase
+      .from('employee_work_sheet_shares')
+      .select('id', { count: 'exact', head: true })
+      .eq('sheet_id', sheetId)
+
+    return {
+      ...sheet,
+      access: { isOwner: true, canEdit: true, shareCount: count ?? 0 },
+    }
+  }
+
+  let viaFolder: string | null = null
+  if (sheet.folder_id) {
+    const { data: folderShare } = await supabase
+      .from('employee_work_sheet_folder_shares')
+      .select('folder:employee_work_sheet_folders(name)')
+      .eq('folder_id', sheet.folder_id)
+      .eq('shared_with', profile.id)
+      .maybeSingle()
+
+    const folder = folderShare?.folder as unknown as { name: string } | null
+    if (folder?.name) viaFolder = folder.name
+  }
+
+  const { data: owner } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name')
+    .eq('id', sheet.employee_id)
+    .maybeSingle()
+
+  return {
+    ...sheet,
+    access: {
+      isOwner:   false,
+      canEdit:   access.canEdit,
+      ownerName: owner?.full_name ?? null,
+      viaFolder,
+    },
+  }
 }
 
 export async function getMyWorkSheetCount(): Promise<number> {
@@ -438,6 +520,29 @@ export async function updateWorkSheet(
   if (error) throw new Error(error.message)
   revalidateMyWork()
   return parseSheetRow(data)
+}
+
+export async function renameWorkSheet(
+  sheetId: string,
+  name: string,
+): Promise<Pick<WorkSheet, 'id' | 'name' | 'updated_at'>> {
+  const profile  = await requireProfile()
+  const trimmed  = name.trim()
+  if (!trimmed) throw new Error('Name is required')
+  const supabase = await createClient()
+
+  await assertSheetOwner(supabase, sheetId, profile.id)
+
+  const { data, error } = await supabase
+    .from('employee_work_sheets')
+    .update({ name: trimmed })
+    .eq('id', sheetId)
+    .select('id, name, updated_at')
+    .single()
+
+  if (error) throw new Error(error.message)
+  revalidateMyWork()
+  return data
 }
 
 export async function deleteWorkSheet(sheetId: string): Promise<void> {
