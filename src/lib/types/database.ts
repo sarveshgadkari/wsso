@@ -266,6 +266,8 @@ export type Database = {
           code: string
           title: string
           description: string | null
+          training_notes: string | null
+          training_link: string | null
           project_id: string | null
           assigned_to: string
           created_by: string
@@ -281,6 +283,8 @@ export type Database = {
           code?: string     // auto-generated (TAC001…)
           title: string
           description?: string | null
+          training_notes?: string | null
+          training_link?: string | null
           project_id?: string | null
           assigned_to: string
           created_by: string
@@ -296,6 +300,8 @@ export type Database = {
           code?: string
           title?: string
           description?: string | null
+          training_notes?: string | null
+          training_link?: string | null
           project_id?: string | null
           assigned_to?: string
           created_by?: string

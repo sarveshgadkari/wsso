@@ -33,15 +33,42 @@ export interface WorkSheet {
   rows:            WorkSheetRow[]
   blocks:          DocBlock[]
   source_filename: string | null
+  folder_id:       string | null
   created_at:      string
   updated_at:      string
 }
 
+export interface WorkSheetFolder {
+  id:          string
+  employee_id: string
+  name:        string
+  created_at:  string
+  updated_at:  string
+}
+
+export interface WorkSheetFolderAccess {
+  isOwner:    boolean
+  canEdit:    boolean
+  ownerName?: string | null
+}
+
+export type WorkSheetFolderWithAccess = WorkSheetFolder & { access: WorkSheetFolderAccess }
+
+export interface WorkSheetFolderShare {
+  id:          string
+  folder_id:   string
+  shared_with: string
+  can_edit:    boolean
+  created_at:  string
+  user:        ShareableUser
+}
+
 export interface WorkSheetAccess {
-  isOwner:     boolean
-  canEdit:     boolean
-  ownerName?:  string | null
-  shareCount?: number
+  isOwner:      boolean
+  canEdit:      boolean
+  ownerName?:   string | null
+  shareCount?:  number
+  viaFolder?:   string | null
 }
 
 export type WorkSheetWithAccess = WorkSheet & { access: WorkSheetAccess }

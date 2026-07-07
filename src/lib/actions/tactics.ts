@@ -11,7 +11,9 @@ import type { TacticStatus } from '@/lib/types'
 
 const TacticInputSchema = z.object({
   title:           z.string().min(1, 'Title is required').max(200),
-  description:     z.string().max(2000).optional().nullable(),
+  description:     z.string().optional().nullable(),
+  training_notes:  z.string().optional().nullable(),
+  training_link:   z.string().trim().url('Enter a valid URL').optional().nullable().or(z.literal('')),
   project_id:      z.string().uuid().optional().nullable(),
   assigned_to:     z.string().uuid('Select an employee'),
   priority:        z.enum(['low', 'medium', 'high', 'critical']),
@@ -33,6 +35,8 @@ export async function createTactic(raw: TacticInput) {
     .insert({
       title:           input.title,
       description:     input.description     ?? null,
+      training_notes:  input.training_notes   ?? null,
+      training_link:   input.training_link    || null,
       project_id:      input.project_id      ?? null,
       assigned_to:     input.assigned_to,
       created_by:      profile.id,
@@ -79,6 +83,8 @@ export async function updateTactic(id: string, raw: TacticInput) {
     .update({
       title:           input.title,
       description:     input.description     ?? null,
+      training_notes:  input.training_notes   ?? null,
+      training_link:   input.training_link    || null,
       project_id:      input.project_id      ?? null,
       assigned_to:     input.assigned_to,
       priority:        input.priority,

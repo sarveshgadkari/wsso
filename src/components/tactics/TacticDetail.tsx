@@ -128,6 +128,26 @@ export function TacticDetail({
         </div>
       )}
 
+      {/* Training */}
+      {(tactic.training_notes || tactic.training_link) && (
+        <div className="card p-4">
+          <h3 className="mb-2 text-sm font-semibold text-neutral-700">Training</h3>
+          {tactic.training_notes && (
+            <p className="whitespace-pre-wrap text-sm text-neutral-700">{tactic.training_notes}</p>
+          )}
+          {tactic.training_link && (
+            <a
+              href={tactic.training_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-sm font-medium text-primary-600 hover:underline"
+            >
+              {tactic.training_link}
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Status actions */}
       <div className="card p-4">
         <h3 className="mb-3 text-sm font-semibold text-neutral-700">Next action</h3>

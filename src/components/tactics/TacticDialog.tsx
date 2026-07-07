@@ -35,7 +35,9 @@ interface Props {
 
 const schema = z.object({
   title:           z.string().min(1, 'Title is required').max(200),
-  description:     z.string().max(2000).optional(),
+  description:     z.string().optional(),
+  training_notes:  z.string().optional(),
+  training_link:   z.string().trim().url('Enter a valid URL').optional().or(z.literal('')),
   project_id:      z.string().optional(),
   assigned_to:     z.string().min(1, 'Select an employee'),
   priority:        z.enum(['low', 'medium', 'high', 'critical']),
@@ -75,6 +77,8 @@ export function TacticDialog({
           ? {
               title:           tactic.title,
               description:     tactic.description     ?? '',
+              training_notes:  tactic.training_notes   ?? '',
+              training_link:   tactic.training_link    ?? '',
               project_id:      tactic.project_id      ?? '',
               assigned_to:     tactic.assigned_to,
               priority:        tactic.priority,
@@ -83,7 +87,10 @@ export function TacticDialog({
                                  ? Number(tactic.estimated_hours)
                                  : ('' as unknown as number),
             }
-          : { priority: 'medium', title: '', description: '', project_id: '', assigned_to: '', due_date: '', estimated_hours: '' as unknown as number },
+          : {
+              priority: 'medium', title: '', description: '', training_notes: '', training_link: '',
+              project_id: '', assigned_to: '', due_date: '', estimated_hours: '' as unknown as number,
+            },
       )
     }
   }, [open, tactic, reset])
@@ -93,6 +100,8 @@ export function TacticDialog({
       const payload = {
         title:           values.title,
         description:     values.description     || null,
+        training_notes:  values.training_notes  || null,
+        training_link:   values.training_link    || null,
         project_id:      values.project_id      || null,
         assigned_to:     values.assigned_to,
         priority:        values.priority,
@@ -153,10 +162,31 @@ export function TacticDialog({
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-neutral-700">Description</label>
           <textarea
-            rows={3}
+            rows={4}
             placeholder="Optional description…"
             className={textareaClass}
             {...register('description')}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+          <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Training (optional)
+          </label>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-neutral-700">Training task</label>
+            <textarea
+              rows={3}
+              placeholder="What should the employee learn or review before starting?"
+              className={textareaClass}
+              {...register('training_notes')}
+            />
+          </div>
+          <Input
+            label="Training link"
+            placeholder="https://…"
+            error={errors.training_link?.message}
+            {...register('training_link')}
           />
         </div>
 

@@ -1,5 +1,5 @@
 import { requireProfile } from '@/lib/auth/session'
-import { listMyWorkSheets, getMyWorkOrderOptions } from '@/lib/actions/my-work'
+import { listMyWorkSheets, listWorkSheetFolders, getMyWorkOrderOptions } from '@/lib/actions/my-work'
 import { MyWorkShell } from '@/components/my-work/MyWorkShell'
 
 export const metadata = { title: 'My Work — WSSO' }
@@ -7,8 +7,9 @@ export const metadata = { title: 'My Work — WSSO' }
 export default async function MyWorkPage() {
   await requireProfile()
 
-  const [sheets, workOrders] = await Promise.all([
+  const [sheets, folders, workOrders] = await Promise.all([
     listMyWorkSheets(),
+    listWorkSheetFolders(),
     getMyWorkOrderOptions(),
   ])
 
@@ -22,7 +23,7 @@ export default async function MyWorkPage() {
         </p>
       </div>
 
-      <MyWorkShell initialSheets={sheets} workOrders={workOrders} />
+      <MyWorkShell initialSheets={sheets} initialFolders={folders} workOrders={workOrders} />
     </div>
   )
 }
