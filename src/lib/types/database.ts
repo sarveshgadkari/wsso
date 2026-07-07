@@ -482,7 +482,9 @@ export type Database = {
           columns:         string[]
           rows:            Json
           blocks:          Json
+          doc_html:        string | null
           source_filename: string | null
+          folder_id:       string | null
           created_at:      string
           updated_at:      string
         }
@@ -494,7 +496,9 @@ export type Database = {
           columns?:         string[]
           rows?:            Json
           blocks?:          Json
+          doc_html?:        string | null
           source_filename?: string | null
+          folder_id?:       string | null
           created_at?:      string
           updated_at?:      string
         }
@@ -506,7 +510,9 @@ export type Database = {
           columns?:         string[]
           rows?:            Json
           blocks?:          Json
+          doc_html?:        string | null
           source_filename?: string | null
+          folder_id?:       string | null
         }
         Relationships: [
           {

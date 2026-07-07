@@ -31,7 +31,9 @@ export interface WorkSheet {
   sheet_type:      WorkSheetType
   columns:         string[]
   rows:            WorkSheetRow[]
+  /** @deprecated legacy block-based page content — superseded by doc_html */
   blocks:          DocBlock[]
+  doc_html:        string | null
   source_filename: string | null
   folder_id:       string | null
   created_at:      string
@@ -95,8 +97,3 @@ export interface WorkOrderOption {
   title:  string
   status: string
 }
-
-export const DEFAULT_DOCUMENT_BLOCKS: DocBlock[] = [
-  { id: 'b1', type: 'heading1', text: '' },
-  { id: 'b2', type: 'paragraph', text: '' },
-]

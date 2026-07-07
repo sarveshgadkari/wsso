@@ -32,6 +32,43 @@
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
+
+  /* Rich-text "My Work" document editor (Tiptap) */
+  .tiptap-doc {
+    @apply text-neutral-800;
+  }
+  .tiptap-doc h1 { @apply mb-3 mt-6 text-3xl font-bold text-neutral-900 first:mt-0; }
+  .tiptap-doc h2 { @apply mb-2 mt-5 text-2xl font-semibold text-neutral-900 first:mt-0; }
+  .tiptap-doc h3 { @apply mb-2 mt-4 text-xl font-semibold text-neutral-800 first:mt-0; }
+  .tiptap-doc p { @apply mb-3 leading-relaxed; }
+  .tiptap-doc ul { @apply mb-3 ml-6 list-disc; }
+  .tiptap-doc ol { @apply mb-3 ml-6 list-decimal; }
+  .tiptap-doc li { @apply mb-1; }
+  .tiptap-doc li > p { @apply mb-0; }
+  .tiptap-doc blockquote { @apply mb-3 border-l-4 border-neutral-200 pl-4 italic text-neutral-600; }
+  .tiptap-doc pre { @apply mb-3 overflow-x-auto rounded-md bg-neutral-900 p-3 text-sm text-neutral-100; }
+  .tiptap-doc code { @apply rounded bg-neutral-100 px-1 py-0.5 text-sm text-neutral-800; }
+  .tiptap-doc pre code { @apply bg-transparent p-0 text-inherit; }
+  .tiptap-doc hr { @apply my-6 border-neutral-200; }
+  .tiptap-doc a { @apply text-primary-600 underline; }
+  .tiptap-doc img { @apply max-w-full rounded-md; }
+  .tiptap-doc mark { @apply rounded px-0.5; }
+  .tiptap-doc table { @apply mb-3 w-full table-fixed border-collapse; }
+  .tiptap-doc th, .tiptap-doc td {
+    @apply relative border border-neutral-200 px-2 py-1 text-left align-top;
+  }
+  .tiptap-doc th { @apply bg-neutral-50 font-semibold; }
+  .tiptap-doc ul[data-type='taskList'] { @apply ml-0 list-none; }
+  .tiptap-doc ul[data-type='taskList'] li { @apply flex items-start gap-2; }
+  .tiptap-doc ul[data-type='taskList'] li > label { @apply mt-1 select-none; }
+  .tiptap-doc ul[data-type='taskList'] li > div { @apply flex-1; }
+  .tiptap-doc p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    @apply text-neutral-300;
+  }
 }
 
 @media print {

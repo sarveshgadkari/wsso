@@ -11,14 +11,12 @@ import type {
   WorkSheet,
   WorkSheetRow,
   WorkOrderOption,
-  DocBlock,
   WorkSheetWithAccess,
   WorkSheetShare,
   ShareableUser,
   WorkSheetFolder,
   WorkSheetFolderShare,
 } from '@/lib/my-work/types'
-import { DEFAULT_DOCUMENT_BLOCKS } from '@/lib/my-work/types'
 
 const MAX_ROWS = 2000
 
@@ -280,13 +278,6 @@ export async function createBlankWorkSheet(name: string, folderId?: string | nul
 
 // ── Create Notion-style document page ───────────────────────────────────────────
 
-function freshDocumentBlocks(): DocBlock[] {
-  return DEFAULT_DOCUMENT_BLOCKS.map(b => ({
-    ...b,
-    id: crypto.randomUUID(),
-  }))
-}
-
 export async function createDocumentWorkSheet(name: string, folderId?: string | null): Promise<WorkSheet> {
   const profile  = await requireProfile()
   const supabase = await createClient()
@@ -300,7 +291,8 @@ export async function createDocumentWorkSheet(name: string, folderId?: string | 
       sheet_type:  'document',
       columns:     [],
       rows:        [],
-      blocks:      freshDocumentBlocks(),
+      blocks:      [],
+      doc_html:    '<p></p>',
       folder_id:   folderId ?? null,
     })
     .select()
@@ -369,8 +361,8 @@ export async function uploadWorkSheetDocument(formData: FormData): Promise<WorkS
     throw new Error('Please upload a Word document (.docx) or text file (.txt)')
   }
 
-  const buffer = await file.arrayBuffer()
-  const blocks = await parseDocumentBuffer(buffer, file.name)
+  const buffer   = await file.arrayBuffer()
+  const docHtml  = await parseDocumentBuffer(buffer, file.name)
 
   const name = (typeof nameRaw === 'string' && nameRaw.trim())
     ? nameRaw.trim()
@@ -385,7 +377,8 @@ export async function uploadWorkSheetDocument(formData: FormData): Promise<WorkS
       sheet_type:      'document',
       columns:         [],
       rows:            [],
-      blocks,
+      blocks:          [],
+      doc_html:        docHtml,
       source_filename: file.name,
       folder_id:       typeof folderRaw === 'string' && folderRaw ? folderRaw : null,
     })
@@ -407,14 +400,15 @@ const blockSchema = z.object({
 })
 
 const updateSchema = z.object({
-  name:    z.string().min(1).max(120).optional(),
-  columns: z.array(z.string().min(1).max(80)).max(30).optional(),
-  rows:    z.array(z.object({
+  name:     z.string().min(1).max(120).optional(),
+  columns:  z.array(z.string().min(1).max(80)).max(30).optional(),
+  rows:     z.array(z.object({
     id:        z.string().uuid(),
     cells:     z.record(z.string()),
     tactic_id: z.string().uuid().nullable().optional(),
   })).max(MAX_ROWS).optional(),
-  blocks:  z.array(blockSchema).max(500).optional(),
+  blocks:   z.array(blockSchema).max(500).optional(),
+  doc_html: z.string().max(2_000_000).optional(),
 })
 
 export async function updateWorkSheet(
@@ -428,10 +422,11 @@ export async function updateWorkSheet(
   await assertSheetAccess(supabase, sheetId, profile.id, true)
 
   const patch: Record<string, unknown> = {}
-  if (input.name    !== undefined) patch.name    = input.name
-  if (input.columns !== undefined) patch.columns = input.columns
-  if (input.rows    !== undefined) patch.rows    = input.rows
-  if (input.blocks  !== undefined) patch.blocks  = input.blocks
+  if (input.name     !== undefined) patch.name     = input.name
+  if (input.columns  !== undefined) patch.columns  = input.columns
+  if (input.rows     !== undefined) patch.rows     = input.rows
+  if (input.blocks   !== undefined) patch.blocks   = input.blocks
+  if (input.doc_html !== undefined) patch.doc_html = input.doc_html
 
   const { data, error } = await supabase
     .from('employee_work_sheets')

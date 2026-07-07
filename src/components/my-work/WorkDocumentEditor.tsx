@@ -1,20 +1,28 @@
 'use client'
 
-import { useState, useRef, useTransition, KeyboardEvent, useMemo } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import { useEditor, EditorContent, type Editor } from '@tiptap/react'
+import { StarterKit } from '@tiptap/starter-kit'
+import { TextAlign } from '@tiptap/extension-text-align'
+import { TextStyleKit } from '@tiptap/extension-text-style'
+import { Highlight } from '@tiptap/extension-highlight'
+import { Placeholder } from '@tiptap/extension-placeholder'
+import { TableKit } from '@tiptap/extension-table'
+import { Image } from '@tiptap/extension-image'
+import { TaskList } from '@tiptap/extension-task-list'
+import { TaskItem } from '@tiptap/extension-task-item'
 import {
-  Plus, Trash2, Save, GripVertical, Type, List, ListOrdered,
-  CheckSquare, Minus, Heading1, Heading2, Heading3,
-  ClipboardPlus, Users,
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading1, Heading2, Heading3,
+  List, ListOrdered, CheckSquare, Quote, Code2, Link2, Link2Off, Table2, ImagePlus, Minus,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Undo2, Redo2, Eraser,
+  Rows3, Columns3, Trash2 as TableTrash, Trash2, Save, ClipboardPlus, Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { useToast } from '@/lib/store/toast'
-import {
-  updateWorkSheet,
-  deleteWorkSheet,
-  createPersonalWorkOrder,
-} from '@/lib/actions/my-work'
-import type { WorkSheet, DocBlock, DocBlockType, WorkSheetAccess } from '@/lib/my-work/types'
+import { updateWorkSheet, deleteWorkSheet, createPersonalWorkOrder } from '@/lib/actions/my-work'
+import type { WorkSheet, WorkSheetAccess } from '@/lib/my-work/types'
+import { legacyBlocksToHtml } from '@/lib/my-work/blocks-to-html'
 import { WorkSheetShareDialog } from './WorkSheetShareDialog'
 import { cn } from '@/lib/utils'
 
@@ -26,101 +34,212 @@ interface Props {
   onShareChange: () => void
 }
 
-function newBlock(type: DocBlockType = 'paragraph'): DocBlock {
-  return { id: crypto.randomUUID(), type, text: '', checked: type === 'todo' ? false : undefined }
+function ToolbarButton({
+  active, disabled, onClick, title, children,
+}: {
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors',
+        active ? 'bg-primary-100 text-primary-700' : 'text-neutral-600 hover:bg-neutral-100',
+        disabled && 'cursor-not-allowed opacity-30 hover:bg-transparent',
+      )}
+    >
+      {children}
+    </button>
+  )
 }
 
-const BLOCK_STYLES: Record<DocBlockType, string> = {
-  heading1:  'text-2xl font-bold text-neutral-900',
-  heading2:  'text-xl font-semibold text-neutral-900',
-  heading3:  'text-lg font-medium text-neutral-800',
-  paragraph: 'text-base text-neutral-700',
-  bullet:    'text-base text-neutral-700',
-  numbered:  'text-base text-neutral-700',
-  todo:      'text-base text-neutral-700',
-  divider:   '',
+function ToolbarDivider() {
+  return <div className="mx-1 h-5 w-px shrink-0 bg-neutral-200" />
 }
 
-const TYPE_OPTIONS: { type: DocBlockType; label: string; icon: typeof Type }[] = [
-  { type: 'paragraph', label: 'Text',     icon: Type },
-  { type: 'heading1',  label: 'Heading 1', icon: Heading1 },
-  { type: 'heading2',  label: 'Heading 2', icon: Heading2 },
-  { type: 'heading3',  label: 'Heading 3', icon: Heading3 },
-  { type: 'bullet',    label: 'Bullet',   icon: List },
-  { type: 'numbered',  label: 'Numbered', icon: ListOrdered },
-  { type: 'todo',      label: 'To-do',    icon: CheckSquare },
-  { type: 'divider',   label: 'Divider',  icon: Minus },
-]
+function EditorToolbar({ editor }: { editor: Editor }) {
+  const setLink = () => {
+    const previous = editor.getAttributes('link').href as string | undefined
+    const url = window.prompt('Link URL', previous ?? 'https://')
+    if (url === null) return
+    if (!url.trim()) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run()
+      return
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run()
+  }
+
+  const addImage = () => {
+    const url = window.prompt('Image URL')
+    if (!url?.trim()) return
+    editor.chain().focus().setImage({ src: url.trim() }).run()
+  }
+
+  const inTable = editor.isActive('table')
+
+  return (
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-neutral-200 bg-neutral-50 px-2 py-1.5">
+      <ToolbarButton title="Undo" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}>
+        <Undo2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Redo" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}>
+        <Redo2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Heading 1" active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+        <Heading1 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+        <Heading2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Heading 3" active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+        <Heading3 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <Bold className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <Italic className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+        <UnderlineIcon className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Strikethrough" active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}>
+        <Strikethrough className="h-4 w-4" />
+      </ToolbarButton>
+      <label title="Text color" className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-neutral-600 hover:bg-neutral-100">
+        <span className="text-sm font-bold" style={{ color: (editor.getAttributes('textStyle').color as string) || undefined }}>A</span>
+        <input
+          type="color"
+          className="h-0 w-0 opacity-0"
+          onChange={e => editor.chain().focus().setColor(e.target.value).run()}
+        />
+      </label>
+      <label title="Highlight" className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-neutral-600 hover:bg-neutral-100">
+        <span className="rounded bg-yellow-200 px-0.5 text-xs font-bold">H</span>
+        <input
+          type="color"
+          className="h-0 w-0 opacity-0"
+          onChange={e => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()}
+        />
+      </label>
+      <ToolbarButton title="Clear formatting" onClick={() => editor.chain().focus().unsetAllMarks().removeEmptyTextStyle().run()}>
+        <Eraser className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Align left" active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()}>
+        <AlignLeft className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Align center" active={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()}>
+        <AlignCenter className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Align right" active={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()}>
+        <AlignRight className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Justify" active={editor.isActive({ textAlign: 'justify' })} onClick={() => editor.chain().focus().setTextAlign('justify').run()}>
+        <AlignJustify className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <List className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <ListOrdered className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="To-do list" active={editor.isActive('taskList')} onClick={() => editor.chain().focus().toggleTaskList().run()}>
+        <CheckSquare className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Quote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+        <Quote className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+        <Code2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Link" active={editor.isActive('link')} onClick={setLink}>
+        <Link2 className="h-4 w-4" />
+      </ToolbarButton>
+      {editor.isActive('link') && (
+        <ToolbarButton title="Remove link" onClick={() => editor.chain().focus().unsetLink().run()}>
+          <Link2Off className="h-4 w-4" />
+        </ToolbarButton>
+      )}
+      <ToolbarButton title="Insert image" onClick={addImage}>
+        <ImagePlus className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        title="Insert table"
+        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+      >
+        <Table2 className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Horizontal rule" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+        <Minus className="h-4 w-4" />
+      </ToolbarButton>
+      {inTable && (
+        <>
+          <ToolbarDivider />
+          <ToolbarButton title="Add row" onClick={() => editor.chain().focus().addRowAfter().run()}>
+            <Rows3 className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton title="Add column" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+            <Columns3 className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton title="Delete table" onClick={() => editor.chain().focus().deleteTable().run()}>
+            <TableTrash className="h-4 w-4" />
+          </ToolbarButton>
+        </>
+      )}
+    </div>
+  )
+}
 
 export function WorkDocumentEditor({ sheet, access, onSheetChange, onSheetDelete, onShareChange }: Props) {
-  const toast = useToast()
+  const toast   = useToast()
   const canEdit = access.canEdit
-  const [blocks, setBlocks]     = useState<DocBlock[]>(
-    sheet.blocks.length ? sheet.blocks : [newBlock('heading1'), newBlock('paragraph')],
-  )
-  const [dirty, setDirty]       = useState(false)
-  const [isPending, start]      = useTransition()
+  const [dirty, setDirty]           = useState(false)
+  const [isPending, start]          = useTransition()
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
-  const [menuBlockId, setMenuBlockId] = useState<string | null>(null)
-  const inputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
+  const [shareOpen, setShareOpen]   = useState(false)
 
-  const markDirty = () => setDirty(true)
+  const initialContent = sheet.doc_html ?? legacyBlocksToHtml(sheet.blocks)
 
-  const updateBlock = (id: string, patch: Partial<DocBlock>) => {
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b))
-    markDirty()
-  }
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: !canEdit, autolink: true } }),
+      TextStyleKit,
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Placeholder.configure({ placeholder: 'Start typing…' }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      TableKit.configure({ table: { resizable: true } }),
+      Image,
+    ],
+    content: initialContent,
+    editable: canEdit,
+    immediatelyRender: false,
+    onUpdate: () => setDirty(true),
+    editorProps: { attributes: { class: 'tiptap-doc focus:outline-none min-h-[360px]' } },
+  }, [sheet.id])
 
-  const insertAfter = (afterId: string, type: DocBlockType = 'paragraph') => {
-    const idx = blocks.findIndex(b => b.id === afterId)
-    const nb  = newBlock(type)
-    setBlocks(prev => [...prev.slice(0, idx + 1), nb, ...prev.slice(idx + 1)])
-    markDirty()
-    setTimeout(() => inputRefs.current[nb.id]?.focus(), 0)
-    return nb.id
-  }
-
-  const removeBlock = (id: string) => {
-    if (blocks.length <= 1) return
-    const idx = blocks.findIndex(b => b.id === id)
-    setBlocks(prev => prev.filter(b => b.id !== id))
-    markDirty()
-    const neighbor = blocks[idx - 1] ?? blocks[idx + 1]
-    if (neighbor) setTimeout(() => inputRefs.current[neighbor.id]?.focus(), 0)
-  }
-
-  const setBlockType = (id: string, type: DocBlockType) => {
-    updateBlock(id, {
-      type,
-      checked: type === 'todo' ? false : undefined,
-      text:    type === 'divider' ? '' : blocks.find(b => b.id === id)?.text ?? '',
-    })
-    setMenuBlockId(null)
-  }
-
-  const handleKeyDown = (id: string, e: KeyboardEvent<HTMLTextAreaElement>) => {
-    const block = blocks.find(b => b.id === id)
-    if (!block || block.type === 'divider') return
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      insertAfter(id, block.type === 'bullet' || block.type === 'numbered' || block.type === 'todo'
-        ? block.type
-        : 'paragraph',
-      )
-    }
-
-    if (e.key === 'Backspace' && block.text === '') {
-      e.preventDefault()
-      removeBlock(id)
-    }
-  }
+  useEffect(() => {
+    editor?.setEditable(canEdit)
+  }, [canEdit, editor])
 
   const save = () => {
+    if (!editor) return
     start(async () => {
       try {
-        const updated = await updateWorkSheet(sheet.id, { blocks })
+        const updated = await updateWorkSheet(sheet.id, { doc_html: editor.getHTML() })
         onSheetChange(updated)
         setDirty(false)
         toast.success('Page saved')
@@ -131,28 +250,15 @@ export function WorkDocumentEditor({ sheet, access, onSheetChange, onSheetDelete
   }
 
   const createWOFromPage = () => {
-    const titleBlock = blocks.find(b =>
-      ['heading1', 'heading2', 'heading3'].includes(b.type) && b.text.trim(),
-    )
-    const title = titleBlock?.text.trim()
-      ?? blocks.find(b => b.text.trim())?.text.trim()
-      ?? sheet.name
-
-    const body = blocks
-      .filter(b => b.type !== 'divider' && b.text.trim())
-      .map(b => {
-        const prefix =
-          b.type === 'bullet' ? '• ' :
-          b.type === 'numbered' ? '- ' :
-          b.type === 'todo' ? `[${b.checked ? 'x' : ' '}] ` : ''
-        return prefix + b.text.trim()
-      })
-      .join('\n')
+    if (!editor) return
+    const lines = editor.getText({ blockSeparator: '\n' }).split('\n').map(l => l.trim())
+    const title = lines.find(Boolean) ?? sheet.name
+    const body  = lines.filter(Boolean).join('\n')
 
     start(async () => {
       try {
         if (dirty) {
-          const updated = await updateWorkSheet(sheet.id, { blocks })
+          const updated = await updateWorkSheet(sheet.id, { doc_html: editor.getHTML() })
           onSheetChange(updated)
           setDirty(false)
         }
@@ -177,26 +283,12 @@ export function WorkDocumentEditor({ sheet, access, onSheetChange, onSheetDelete
     })
   }
 
-  const numberedMap = useMemo(() => {
-    const map = new Map<string, number>()
-    let n = 0
-    blocks.forEach(b => {
-      if (b.type === 'numbered') {
-        n += 1
-        map.set(b.id, n)
-      } else {
-        n = 0
-      }
-    })
-    return map
-  }, [blocks])
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-neutral-900">{sheet.name}</h3>
-          <p className="text-xs text-neutral-400">Notion-style page — headings, lists, to-dos</p>
+          <p className="text-xs text-neutral-400">Rich-text page — headings, lists, tables, and more</p>
           {!access.isOwner && access.ownerName && (
             <p className="mt-0.5 text-xs text-primary-600">
               Shared by {access.ownerName}
@@ -219,13 +311,6 @@ export function WorkDocumentEditor({ sheet, access, onSheetChange, onSheetDelete
           )}
           {canEdit && (
             <>
-              <Button variant="secondary" size="sm" onClick={() => {
-                const nb = newBlock('paragraph')
-                setBlocks(prev => [...prev, nb])
-                markDirty()
-              }}>
-                <Plus className="h-3.5 w-3.5" /> Block
-              </Button>
               <Button variant="secondary" size="sm" onClick={createWOFromPage} disabled={isPending}>
                 <ClipboardPlus className="h-3.5 w-3.5" /> Create work order
               </Button>
@@ -242,115 +327,13 @@ export function WorkDocumentEditor({ sheet, access, onSheetChange, onSheetDelete
         </div>
       </div>
 
-      <div className="card min-h-[420px] px-4 py-6 sm:px-8">
-        <div className="mx-auto max-w-3xl space-y-1">
-          {blocks.map(block => {
-            if (block.type === 'divider') {
-              return (
-                <div key={block.id} className="group flex items-center gap-2 py-3">
-                  <button type="button" className="opacity-0 group-hover:opacity-40" onClick={() => removeBlock(block.id)}>
-                    <GripVertical className="h-4 w-4" />
-                  </button>
-                  <hr className="flex-1 border-neutral-200" />
-                </div>
-              )
-            }
-
-            return (
-              <div key={block.id} className="group relative flex items-start gap-2 rounded-md py-0.5 hover:bg-neutral-50/80">
-                <button
-                  type="button"
-                  className="mt-2 shrink-0 opacity-0 transition-opacity group-hover:opacity-40"
-                  onClick={() => canEdit && setMenuBlockId(menuBlockId === block.id ? null : block.id)}
-                  title="Change block type"
-                  disabled={!canEdit}
-                >
-                  <GripVertical className="h-4 w-4 text-neutral-400" />
-                </button>
-
-                {block.type === 'bullet' && (
-                  <span className="mt-2.5 w-4 shrink-0 text-neutral-400">•</span>
-                )}
-                {block.type === 'numbered' && (
-                  <span className="mt-2.5 w-5 shrink-0 text-sm text-neutral-400">
-                    {numberedMap.get(block.id)}.
-                  </span>
-                )}
-                {block.type === 'todo' && (
-                  <input
-                    type="checkbox"
-                    className="mt-3 h-4 w-4 shrink-0 rounded border-neutral-300"
-                    checked={!!block.checked}
-                    disabled={!canEdit}
-                    onChange={e => updateBlock(block.id, { checked: e.target.checked })}
-                  />
-                )}
-
-                <textarea
-                  ref={el => { inputRefs.current[block.id] = el }}
-                  rows={1}
-                  readOnly={!canEdit}
-                  value={block.text}
-                  placeholder={
-                    block.type === 'heading1' ? 'Untitled' :
-                    block.type === 'todo' ? 'To-do' :
-                    'Type something…'
-                  }
-                  className={cn(
-                    'min-h-[1.75rem] flex-1 resize-none overflow-hidden border-0 bg-transparent py-1 leading-relaxed placeholder:text-neutral-300 focus:outline-none focus:ring-0',
-                    BLOCK_STYLES[block.type],
-                    block.checked && block.type === 'todo' && 'text-neutral-400 line-through',
-                  )}
-                  onChange={e => {
-                    updateBlock(block.id, { text: e.target.value })
-                    e.target.style.height = 'auto'
-                    e.target.style.height = `${e.target.scrollHeight}px`
-                  }}
-                  onKeyDown={e => handleKeyDown(block.id, e)}
-                  onFocus={e => {
-                    e.target.style.height = 'auto'
-                    e.target.style.height = `${e.target.scrollHeight}px`
-                  }}
-                />
-
-                {menuBlockId === block.id && (
-                  <div className="absolute left-8 top-full z-20 mt-1 flex flex-wrap gap-1 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
-                    {TYPE_OPTIONS.map(opt => (
-                      <button
-                        key={opt.type}
-                        type="button"
-                        className={cn(
-                          'flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-neutral-100',
-                          block.type === opt.type && 'bg-primary-50 text-primary-700',
-                        )}
-                        onClick={() => setBlockType(block.id, opt.type)}
-                      >
-                        <opt.icon className="h-3 w-3" />
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+      <div className="card overflow-hidden">
+        {canEdit && editor && <EditorToolbar editor={editor} />}
+        <div className="min-h-[420px] px-4 py-6 sm:px-8">
+          <div className="mx-auto max-w-3xl">
+            <EditorContent editor={editor} />
+          </div>
         </div>
-
-        {canEdit && (
-          <button
-            type="button"
-            className="mx-auto mt-6 flex w-full max-w-3xl items-center gap-2 rounded-md px-2 py-2 text-sm text-neutral-400 hover:bg-neutral-50 hover:text-neutral-600"
-            onClick={() => {
-              const nb = newBlock('paragraph')
-              setBlocks(prev => [...prev, nb])
-              markDirty()
-              setTimeout(() => inputRefs.current[nb.id]?.focus(), 0)
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            Click to add a block, or press Enter at the end of a line
-          </button>
-        )}
       </div>
 
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete page?">
