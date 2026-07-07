@@ -32,6 +32,7 @@ interface ReviewTacticRow {
   title:    string
   priority: string
   assignee: { full_name: string } | null
+  latestWorkNote?: string | null
 }
 
 export async function ManagerDashboard() {
@@ -149,7 +150,30 @@ export async function ManagerDashboard() {
     hours: Math.round(((hoursByDate[date] ?? 0) / 60) * 10) / 10,
   }))
 
-  const reviewTactics = (reviewRes.data ?? []) as unknown as ReviewTacticRow[]
+  const reviewTacticsRaw = (reviewRes.data ?? []) as unknown as ReviewTacticRow[]
+  const reviewIds = reviewTacticsRaw.map(t => t.id)
+
+  const workNotesByTactic: Record<string, string> = {}
+  if (reviewIds.length > 0) {
+    const { data: workLogs } = await supabase
+      .from('activity_logs')
+      .select('tactic_id, notes, created_at')
+      .in('tactic_id', reviewIds)
+      .eq('action', 'Work update')
+      .order('created_at', { ascending: false })
+
+    ;(workLogs ?? []).forEach((log: { tactic_id: string; notes: string | null }) => {
+      const note = log.notes?.trim()
+      if (note && !workNotesByTactic[log.tactic_id]) {
+        workNotesByTactic[log.tactic_id] = note
+      }
+    })
+  }
+
+  const reviewTactics = reviewTacticsRaw.map(t => ({
+    ...t,
+    latestWorkNote: workNotesByTactic[t.id] ?? null,
+  }))
 
   function fmtHours(minutes: number): string {
     const h = Math.floor(minutes / 60)
@@ -202,21 +226,30 @@ export async function ManagerDashboard() {
           ) : (
             <ul className="divide-y divide-neutral-100">
               {reviewTactics.map(t => (
-                <li key={t.id} className="flex items-center justify-between px-5 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-neutral-800">{t.title}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">
-                      <span className="font-mono">{t.code}</span>
-                      {t.assignee && <> · {t.assignee.full_name}</>}
-                    </p>
-                  </div>
-                  <div className="ml-3 flex shrink-0 items-center gap-2">
-                    <Link
-                      href={`/tactics/${t.id}`}
-                      className="flex items-center gap-0.5 text-xs text-primary-600 hover:underline"
-                    >
-                      Review <ChevronRight className="h-3 w-3" />
-                    </Link>
+                <li key={t.id} className="px-5 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-neutral-800">{t.title}</p>
+                      <p className="mt-0.5 text-xs text-neutral-400">
+                        <span className="font-mono">{t.code}</span>
+                        {t.assignee && <> · {t.assignee.full_name}</>}
+                      </p>
+                      {t.latestWorkNote ? (
+                        <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-xs text-neutral-600">
+                          {t.latestWorkNote}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs italic text-neutral-400">No work notes submitted</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Link
+                        href={`/tactics/${t.id}`}
+                        className="flex items-center gap-0.5 text-xs text-primary-600 hover:underline"
+                      >
+                        Review <ChevronRight className="h-3 w-3" />
+                      </Link>
+                    </div>
                   </div>
                 </li>
               ))}

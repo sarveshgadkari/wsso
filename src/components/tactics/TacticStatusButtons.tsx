@@ -10,10 +10,12 @@ import { getAllowedNext, STATUS_LABEL } from '@/lib/tactics-utils'
 import type { TacticStatus, UserRole } from '@/lib/types'
 
 interface Props {
-  tacticId:       string
-  currentStatus:  TacticStatus
-  role:           UserRole
-  onTransitioned: (newStatus: TacticStatus) => void
+  tacticId:         string
+  currentStatus:    TacticStatus
+  role:             UserRole
+  pendingWorkNote?: string
+  onWorkNoteConsumed?: () => void
+  onTransitioned:   (newStatus: TacticStatus) => void
 }
 
 const ICONS: Partial<Record<TacticStatus, React.ComponentType<{ className?: string }>>> = {
@@ -23,7 +25,9 @@ const ICONS: Partial<Record<TacticStatus, React.ComponentType<{ className?: stri
   archived:    Archive,
 }
 
-export function TacticStatusButtons({ tacticId, currentStatus, role, onTransitioned }: Props) {
+export function TacticStatusButtons({
+  tacticId, currentStatus, role, pendingWorkNote, onWorkNoteConsumed, onTransitioned,
+}: Props) {
   const toast = useToast()
   const [isPending, startTransition] = useTransition()
   const [sendBackOpen, setSendBackOpen] = useState(false)
@@ -41,9 +45,11 @@ export function TacticStatusButtons({ tacticId, currentStatus, role, onTransitio
   }
 
   function doTransition(target: TacticStatus, c?: string) {
+    const workNotes = target === 'review' ? pendingWorkNote : undefined
     startTransition(async () => {
       try {
-        await transitionStatus(tacticId, target, c)
+        await transitionStatus(tacticId, target, c, workNotes)
+        if (target === 'review' && workNotes?.trim()) onWorkNoteConsumed?.()
         onTransitioned(target)
         toast.success(`Moved to ${STATUS_LABEL[target]}`)
       } catch (err) {

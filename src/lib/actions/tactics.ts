@@ -113,6 +113,7 @@ export async function transitionStatus(
   tacticId: string,
   targetStatus: TacticStatus,
   comment?: string,
+  workNotes?: string,
 ) {
   const profile = await requireProfile()
   const supabase = await createClient()
@@ -136,6 +137,17 @@ export async function transitionStatus(
 
   if (currentStatus === 'review' && targetStatus === 'in_progress' && !comment?.trim()) {
     throw new Error('A reason is required when sending a tactic back to In Progress')
+  }
+
+  // Save pending work notes when employee submits for review
+  const trimmedWorkNotes = workNotes?.trim()
+  if (targetStatus === 'review' && trimmedWorkNotes) {
+    await supabaseAdmin.from('activity_logs').insert({
+      tactic_id:    tacticId,
+      employee_id:  profile.id,
+      action:       'Work update',
+      notes:        trimmedWorkNotes,
+    })
   }
 
   const { error: updateErr } = await supabase
@@ -175,6 +187,7 @@ export async function transitionStatus(
   revalidatePath('/tactics')
   revalidatePath(`/tactics/${tacticId}`)
   revalidatePath('/kanban')
+  revalidatePath('/dashboard')
   return { status: targetStatus }
 }
 
@@ -238,6 +251,7 @@ export async function submitWorkUpdate(tacticId: string, notes: string) {
 
   revalidatePath(`/tactics/${tacticId}`)
   revalidatePath('/activity-log')
+  revalidatePath('/dashboard')
 }
 
 const DOCUMENTS_BUCKET = 'documents'

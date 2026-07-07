@@ -59,6 +59,7 @@ export function TacticDetail({
   const [editOpen,    setEditOpen]    = useState(false)
   const [deleteOpen,  setDeleteOpen]  = useState(false)
   const [deleting,    setDeleting]    = useState(false)
+  const [pendingWorkNote, setPendingWorkNote] = useState('')
 
   const status   = tactic.status   as TacticStatus
   const priority = tactic.priority as TacticPriority
@@ -155,7 +156,12 @@ export function TacticDetail({
           tacticId={tactic.id}
           currentStatus={status}
           role={role}
-          onTransitioned={newStatus => setTactic(prev => ({ ...prev, status: newStatus }))}
+          pendingWorkNote={pendingWorkNote}
+          onWorkNoteConsumed={() => setPendingWorkNote('')}
+          onTransitioned={newStatus => {
+            setTactic(prev => ({ ...prev, status: newStatus }))
+            router.refresh()
+          }}
         />
         {status === 'archived' && (
           <p className="text-sm text-neutral-400">This work order has been archived.</p>
@@ -218,6 +224,8 @@ export function TacticDetail({
         assignedTo={tactic.assigned_to}
         initialDocuments={documents}
         workUpdates={logs.filter(l => l.action === 'Work update')}
+        pendingNote={pendingWorkNote}
+        onPendingNoteChange={setPendingWorkNote}
       />
 
       {/* Activity timeline */}

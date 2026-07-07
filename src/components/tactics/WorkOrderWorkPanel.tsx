@@ -33,6 +33,8 @@ interface Props {
   assignedTo:       string
   initialDocuments: DocumentMeta[]
   workUpdates:      WorkUpdateEntry[]
+  pendingNote?:     string
+  onPendingNoteChange?: (note: string) => void
 }
 
 export function WorkOrderWorkPanel({
@@ -44,11 +46,18 @@ export function WorkOrderWorkPanel({
   assignedTo,
   initialDocuments,
   workUpdates,
+  pendingNote,
+  onPendingNoteChange,
 }: Props) {
   const router = useRouter()
   const toast  = useToast()
   const [docs, setDocs]         = useState(initialDocuments)
-  const [note, setNote]         = useState('')
+  const [localNote, setLocalNote] = useState(pendingNote ?? '')
+  const note = onPendingNoteChange ? (pendingNote ?? '') : localNote
+  function setNote(value: string) {
+    if (onPendingNoteChange) onPendingNoteChange(value)
+    else setLocalNote(value)
+  }
   const [linkUrl, setLinkUrl]   = useState('')
   const [linkTitle, setLinkTitle] = useState('')
   const [showLink, setShowLink] = useState(false)
@@ -152,7 +161,8 @@ export function WorkOrderWorkPanel({
       {canContribute && (
         <div className="mb-5 flex flex-col gap-3">
           <p className="text-xs text-neutral-500">
-            Describe what you did, attach files or links, then use <strong>Move to Review</strong> above when ready for your manager.
+            Describe what you did, attach files or links, then use <strong>Move to Review</strong> above.
+            Your notes are saved when you click <strong>Save work update</strong> or when you submit for review.
           </p>
           <textarea
             value={note}
@@ -242,7 +252,9 @@ export function WorkOrderWorkPanel({
           <ul className="flex flex-col gap-2">
             {workUpdates.map(u => (
               <li key={u.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2">
-                <p className="whitespace-pre-wrap text-sm text-neutral-700">{u.notes}</p>
+                <p className="whitespace-pre-wrap text-sm text-neutral-700">
+                  {u.notes?.trim() || <span className="italic text-neutral-400">No description</span>}
+                </p>
                 <p className="mt-1 text-xs text-neutral-400">
                   {u.actor?.full_name ?? 'Unknown'} · {new Date(u.created_at).toLocaleString([], {
                     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
