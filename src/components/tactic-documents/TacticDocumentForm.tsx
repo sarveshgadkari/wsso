@@ -254,9 +254,11 @@ export function TacticDocumentForm({
         if (isEdit && initialDoc) {
           await updateTacticDocument(initialDoc.id, input, submitForReview)
           router.push(`/tactic-documents/${initialDoc.id}`)
+          router.refresh()
         } else {
           const doc = await createTacticDocument(input, submitForReview)
           router.push(`/tactic-documents/${doc.id}`)
+          router.refresh()
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')

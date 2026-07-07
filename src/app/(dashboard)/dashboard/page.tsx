@@ -14,7 +14,7 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-xl font-semibold text-neutral-900">
-          Welcome back, {profile.full_name}
+          Welcome back, {profile.full_name ?? 'there'}
         </h2>
         <p className="mt-1 text-sm text-neutral-500">
           {new Date().toLocaleDateString('en-US', {

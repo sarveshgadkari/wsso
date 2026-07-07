@@ -4,10 +4,20 @@ import { getSentAnnouncements } from '@/lib/actions/announcements'
 import { requireProfile } from '@/lib/auth/session'
 
 export async function AnnouncementsDashboardCard() {
-  const profile = await requireProfile()
+  let profile
+  try {
+    profile = await requireProfile()
+  } catch {
+    return null
+  }
   if (!['admin', 'manager'].includes(profile.role)) return null
 
-  const sent = await getSentAnnouncements()
+  let sent: Awaited<ReturnType<typeof getSentAnnouncements>> = []
+  try {
+    sent = await getSentAnnouncements()
+  } catch {
+    sent = []
+  }
   const recent = sent.filter(a => a.status === 'published').slice(0, 1)
 
   return (

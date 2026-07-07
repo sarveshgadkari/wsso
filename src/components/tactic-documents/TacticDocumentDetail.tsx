@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/Button'
 import { RevisionModal } from './RevisionModal'
 import { TacticSharePanel } from './TacticSharePanel'
 import { approveTacticDocument, submitTacticDocument } from '@/lib/actions/tactic-documents'
-import type { TacticDocShareRow } from '@/lib/actions/tactic-documents'
 import { cn } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -70,7 +69,6 @@ interface Props {
   currentUserId: string
   role:        string
   canReview?:  boolean
-  shares?:     TacticDocShareRow[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -118,7 +116,7 @@ function fmtDateTime(iso: string | null): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TacticDocumentDetail({
-  doc, currentUserId, role, canReview = false, shares = [],
+  doc, currentUserId, role, canReview = false,
 }: Props) {
   const router  = useRouter()
   const isOwner = doc.created_by === currentUserId
@@ -265,7 +263,6 @@ export function TacticDocumentDetail({
         <TacticSharePanel
           docId={doc.id}
           docCode={doc.code}
-          shares={shares}
           isOwner={isOwner}
         />
 

@@ -7,23 +7,24 @@ import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import {
   getShareableUsers,
+  getTacticDocumentShares,
   shareTacticDocument,
   unshareTacticDocument,
-  type TacticDocShareRow,
 } from '@/lib/actions/tactic-documents'
+import type { TacticDocShareRow } from '@/lib/tactic-documents/shares'
 
 interface Props {
   docId:    string
   docCode:  string
-  shares:   TacticDocShareRow[]
   isOwner:  boolean
 }
 
 type ShareableUser = { id: string; full_name: string; employee_code: string; role: string }
 
-export function TacticSharePanel({ docId, docCode, shares: initialShares, isOwner }: Props) {
+export function TacticSharePanel({ docId, docCode, isOwner }: Props) {
   const router = useRouter()
-  const [shares, setShares]       = useState(initialShares)
+  const [shares, setShares]       = useState<TacticDocShareRow[]>([])
+  const [sharesLoaded, setSharesLoaded] = useState(false)
   const [open, setOpen]           = useState(false)
   const [users, setUsers]         = useState<ShareableUser[]>([])
   const [selected, setSelected]   = useState('')
@@ -32,8 +33,12 @@ export function TacticSharePanel({ docId, docCode, shares: initialShares, isOwne
   const [isPending, start]        = useTransition()
 
   useEffect(() => {
-    setShares(initialShares)
-  }, [initialShares])
+    if (!isOwner) return
+    getTacticDocumentShares(docId)
+      .then(data => setShares(data))
+      .catch(() => setShares([]))
+      .finally(() => setSharesLoaded(true))
+  }, [docId, isOwner])
 
   function handleOpen() {
     setError('')
@@ -57,6 +62,8 @@ export function TacticSharePanel({ docId, docCode, shares: initialShares, isOwne
         await shareTacticDocument(docId, selected)
         setOpen(false)
         setSelected('')
+        const updated = await getTacticDocumentShares(docId)
+        setShares(updated)
         router.refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to share')
@@ -71,12 +78,12 @@ export function TacticSharePanel({ docId, docCode, shares: initialShares, isOwne
         setShares(prev => prev.filter(s => s.id !== shareId))
         router.refresh()
       } catch {
-        // refresh to resync on failure
         router.refresh()
       }
     })
   }
 
+  if (!isOwner && !sharesLoaded) return null
   if (!isOwner && shares.length === 0) return null
 
   return (
@@ -95,7 +102,9 @@ export function TacticSharePanel({ docId, docCode, shares: initialShares, isOwne
           By default only you, your manager, and admins can see this TACTIC.
           Share with others if they also need access.
         </p>
-        {shares.length === 0 ? (
+        {!sharesLoaded ? (
+          <p className="text-sm text-neutral-400">Loading…</p>
+        ) : shares.length === 0 ? (
           <p className="text-sm text-neutral-400">Not shared with anyone else.</p>
         ) : (
           <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-100">

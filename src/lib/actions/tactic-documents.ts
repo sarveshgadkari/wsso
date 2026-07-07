@@ -5,7 +5,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth/session'
+import { fetchTacticDocumentShares, type TacticDocShareRow } from '@/lib/tactic-documents/shares'
 import type { Profile } from '@/lib/types'
+
+export type { TacticDocShareRow }
 
 // ── Input shapes ──────────────────────────────────────────────────────────────
 
@@ -54,10 +57,8 @@ async function insertTasksAndSteps(
   tasks: TaskInput[],
   nextSteps: NextStepInput[],
 ) {
-  const supabase = await createClient()
-
   if (tasks.length > 0) {
-    const { error } = await supabase.from('tactic_tasks').insert(
+    const { error } = await supabaseAdmin.from('tactic_tasks').insert(
       tasks.map(t => ({
         tactic_document_id: docId,
         title:       t.title,
@@ -73,7 +74,7 @@ async function insertTasksAndSteps(
   }
 
   if (nextSteps.length > 0) {
-    const { error } = await supabase.from('tactic_next_steps').insert(
+    const { error } = await supabaseAdmin.from('tactic_next_steps').insert(
       nextSteps.map(ns => ({
         tactic_document_id: docId,
         description: ns.description,
@@ -146,15 +147,17 @@ export async function createTacticDocument(
   input: TacticDocumentInput,
   submitForReview: boolean,
 ) {
-  const profile  = await requireProfile()
-  const supabase = await createClient()
+  const profile = await requireProfile()
+  if (!['admin', 'manager', 'employee'].includes(profile.role)) {
+    throw new Error('Not authorized to create TACTIC documents')
+  }
 
   const now    = new Date().toISOString()
   const status = submitForReview && profile.role !== 'admin'
     ? 'submitted'
     : profile.role === 'admin' ? 'approved' : 'draft'
 
-  const { data: doc, error } = await supabase
+  const { data: doc, error } = await supabaseAdmin
     .from('tactic_documents')
     .insert({
       purpose:         input.purpose,
@@ -179,18 +182,26 @@ export async function createTacticDocument(
 
   await insertTasksAndSteps(doc.id, input.tasks, input.next_steps)
 
-  await supabaseAdmin.from('activity_logs').insert({
-    employee_id: profile.id,
-    action: status === 'submitted' ? 'tactic_doc.submitted' : 'tactic_doc.created',
-    meta: { entity_type: 'tactic_document', entity_id: doc.id, entity_code: doc.code },
-  })
+  try {
+    await supabaseAdmin.from('activity_logs').insert({
+      employee_id: profile.id,
+      action: status === 'submitted' ? 'tactic_doc.submitted' : 'tactic_doc.created',
+      meta: { entity_type: 'tactic_document', entity_id: doc.id, entity_code: doc.code },
+    })
+  } catch {
+    // Non-blocking audit log
+  }
 
-  // Send notification to reviewer
   if (status === 'submitted') {
-    await notifyReviewer(profile, doc.id, doc.code)
+    try {
+      await notifyReviewer(profile, doc.id, doc.code)
+    } catch {
+      // Non-blocking notification
+    }
   }
 
   revalidatePath('/tactic-documents')
+  revalidatePath(`/tactic-documents/${doc.id}`)
   return doc
 }
 
@@ -407,41 +418,8 @@ export async function requestRevision(id: string, note: string) {
   revalidatePath(`/tactic-documents/${id}`)
 }
 
-export interface TacticDocShareRow {
-  id:          string
-  shared_with: string
-  created_at:  string
-  user:        { id: string; full_name: string; employee_code: string; role: string }
-}
-
 export async function getTacticDocumentShares(docId: string): Promise<TacticDocShareRow[]> {
-  const profile = await requireProfile()
-  const supabase = await createClient()
-
-  const { data: doc } = await supabase
-    .from('tactic_documents')
-    .select('created_by')
-    .eq('id', docId)
-    .single()
-
-  if (!doc) throw new Error('Document not found')
-  if (doc.created_by !== profile.id && profile.role !== 'admin')
-    throw new Error('Not authorized')
-
-  const { data, error } = await supabaseAdmin
-    .from('tactic_document_shares')
-    .select(`
-      id, shared_with, created_at,
-      user:profiles!tactic_document_shares_shared_with_fkey(id, full_name, employee_code, role)
-    `)
-    .eq('tactic_document_id', docId)
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    if (error.message.includes('tactic_document_shares')) return []
-    throw new Error(error.message)
-  }
-  return (data ?? []) as unknown as TacticDocShareRow[]
+  return fetchTacticDocumentShares(docId)
 }
 
 export async function getShareableUsers(docId: string) {

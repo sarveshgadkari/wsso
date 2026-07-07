@@ -6,6 +6,7 @@ import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
+import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { getProfile } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import {
@@ -38,6 +39,9 @@ interface ReviewTacticRow {
 export async function ManagerDashboard() {
   const supabase   = await createClient()
   const viewer     = await getProfile()
+  if (!viewer) return null
+
+  const pendingTacticCount = await countPendingTacticDocuments(viewer)
   const viewerTz   = resolveTimezone(viewer?.timezone)
   const today      = todayInTimezone(viewerTz)
   const sevenAgo   = daysAgo(7)
@@ -52,7 +56,6 @@ export async function ManagerDashboard() {
     teamMembersRes,
     timeLogsRes,
     hoursLogsRes,
-    tacticDocsRes,
   ] = await Promise.all([
     supabase.from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -88,11 +91,6 @@ export async function ManagerDashboard() {
       .select('log_date, duration_minutes')
       .gte('log_date', isoDate(sevenAgo))
       .not('duration_minutes', 'is', null),
-    // TACTIC docs submitted by team employees awaiting Manager review
-    supabase
-      .from('tactic_documents')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'submitted'),
   ])
 
   // Open tactics per team member
@@ -155,19 +153,23 @@ export async function ManagerDashboard() {
 
   const workNotesByTactic: Record<string, string> = {}
   if (reviewIds.length > 0) {
-    const { data: workLogs } = await supabase
-      .from('activity_logs')
-      .select('tactic_id, notes, created_at')
-      .in('tactic_id', reviewIds)
-      .eq('action', 'Work update')
-      .order('created_at', { ascending: false })
+    try {
+      const { data: workLogs } = await supabase
+        .from('activity_logs')
+        .select('tactic_id, notes, created_at')
+        .in('tactic_id', reviewIds)
+        .eq('action', 'Work update')
+        .order('created_at', { ascending: false })
 
-    ;(workLogs ?? []).forEach((log: { tactic_id: string; notes: string | null }) => {
-      const note = log.notes?.trim()
-      if (note && !workNotesByTactic[log.tactic_id]) {
-        workNotesByTactic[log.tactic_id] = note
-      }
-    })
+      ;(workLogs ?? []).forEach((log: { tactic_id: string; notes: string | null }) => {
+        const note = log.notes?.trim()
+        if (note && !workNotesByTactic[log.tactic_id]) {
+          workNotesByTactic[log.tactic_id] = note
+        }
+      })
+    } catch {
+      // Activity log read failed — dashboard still renders
+    }
   }
 
   const reviewTactics = reviewTacticsRaw.map(t => ({
@@ -199,9 +201,9 @@ export async function ManagerDashboard() {
         />
         <StatCard
           label="TACTICs pending"
-          value={tacticDocsRes.count ?? 0}
+          value={pendingTacticCount}
           sub="awaiting your review"
-          variant={(tacticDocsRes.count ?? 0) > 0 ? 'warning' : 'default'}
+          variant={pendingTacticCount > 0 ? 'warning' : 'default'}
           icon={FileText}
         />
       </div>

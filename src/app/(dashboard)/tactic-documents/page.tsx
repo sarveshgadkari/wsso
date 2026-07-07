@@ -7,6 +7,7 @@ import {
   TacticDocumentList,
   type TacticDocRow,
 } from '@/components/tactic-documents/TacticDocumentList'
+import { fetchTacticDocumentsForProfile } from '@/lib/tactic-documents/queries'
 
 export const metadata = { title: 'TACTIC Documents — WSSO' }
 
@@ -15,18 +16,7 @@ export default async function TacticDocumentsPage() {
   const supabase = await createClient()
   const canFilter = ['admin', 'manager', 'director'].includes(profile.role)
 
-  const { data: raw } = await supabase
-    .from('tactic_documents')
-    .select(`
-      id, code, date_of_meeting, purpose, facilitator, status, created_at,
-      creator:profiles!tactic_documents_created_by_fkey(id, full_name, role),
-      company:companies!tactic_documents_company_id_fkey(name),
-      project:projects!tactic_documents_project_id_fkey(name, code)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(300)
-
-  const docs = (raw ?? []) as unknown as TacticDocRow[]
+  const docs = await fetchTacticDocumentsForProfile(profile) as TacticDocRow[]
 
   // Employees list for "Created by" filter (admin/manager/director only)
   let employees: { id: string; full_name: string; employee_code: string }[] = []

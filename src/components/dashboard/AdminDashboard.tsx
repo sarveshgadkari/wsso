@@ -10,6 +10,7 @@ import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
+import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
 import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel, todayInTimezone } from '@/lib/utils/dates'
 import { getProfile } from '@/lib/auth/session'
@@ -23,10 +24,14 @@ interface OverdueTacticRow {
 export async function AdminDashboard() {
   const supabase  = await createClient()
   const viewer    = await getProfile()
-  const tz        = resolveTimezone(viewer?.timezone)
+  if (!viewer) return null
+
+  const tz        = resolveTimezone(viewer.timezone)
   const today     = todayInTimezone(tz)
   const thirtyAgo = daysAgo(30)
   const sevenAgo  = daysAgo(7)
+
+  const pendingTacticCount = await countPendingTacticDocuments(viewer)
 
   const [
     companiesRes,
@@ -38,7 +43,6 @@ export async function AdminDashboard() {
     completionLogsRes,
     hoursLogsRes,
     activeEmployeeIdsRes,
-    tacticDocsRes,
   ] = await Promise.all([
     supabase.from('companies').select('*', { count: 'exact', head: true }),
     supabase.from('profiles')
@@ -74,11 +78,6 @@ export async function AdminDashboard() {
       .not('duration_minutes', 'is', null),
     // Active employee IDs — used for Mechanism 2 stale session check
     supabase.from('profiles').select('id').eq('status', 'active'),
-    // TACTIC docs submitted by Managers that need Admin review
-    supabase
-      .from('tactic_documents')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'submitted'),
   ])
 
   // Mechanism 2: close any stale open sessions (>16 h) for all active employees
@@ -147,9 +146,9 @@ export async function AdminDashboard() {
         />
         <StatCard
           label="TACTICs pending"
-          value={tacticDocsRes.count ?? 0}
+          value={pendingTacticCount}
           sub="awaiting review"
-          variant={(tacticDocsRes.count ?? 0) > 0 ? 'warning' : 'default'}
+          variant={pendingTacticCount > 0 ? 'warning' : 'default'}
           icon={FileText}
         />
       </div>

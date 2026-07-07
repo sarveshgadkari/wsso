@@ -3,7 +3,12 @@ import { Table2, ArrowRight, FileSpreadsheet } from 'lucide-react'
 import { getMyWorkSheetCount } from '@/lib/actions/my-work'
 
 export async function MyWorkDashboardCard() {
-  const count = await getMyWorkSheetCount()
+  let count = 0
+  try {
+    count = await getMyWorkSheetCount()
+  } catch {
+    count = 0
+  }
 
   return (
     <div className="card p-5">
