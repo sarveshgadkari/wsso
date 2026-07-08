@@ -135,14 +135,7 @@ export function TacticDetail({
         </div>
       </div>
 
-      {/* Description */}
-      {tactic.description && (
-        <div className="card p-4">
-          <p className="whitespace-pre-wrap text-sm text-neutral-700">{tactic.description}</p>
-        </div>
-      )}
-
-      {/* Training */}
+      {/* Training first, then assignment instructions */}
       {(tactic.training_notes || tactic.training_link) && (
         <div className="card p-4">
           <h3 className="mb-2 text-sm font-semibold text-neutral-700">Training</h3>
@@ -159,6 +152,13 @@ export function TacticDetail({
               {tactic.training_link}
             </a>
           )}
+        </div>
+      )}
+
+      {tactic.description && (
+        <div className="card p-4">
+          <h3 className="mb-2 text-sm font-semibold text-neutral-700">Assignment Instructions</h3>
+          <p className="whitespace-pre-wrap text-sm text-neutral-700">{tactic.description}</p>
         </div>
       )}
 

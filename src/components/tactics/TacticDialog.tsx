@@ -159,16 +159,6 @@ export function TacticDialog({
           {...register('title')}
         />
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-neutral-700">Description</label>
-          <textarea
-            rows={4}
-            placeholder="Optional description…"
-            className={textareaClass}
-            {...register('description')}
-          />
-        </div>
-
         <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
           <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Training (optional)
@@ -187,6 +177,16 @@ export function TacticDialog({
             placeholder="https://…"
             error={errors.training_link?.message}
             {...register('training_link')}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-neutral-700">Assignment Instructions</label>
+          <textarea
+            rows={4}
+            placeholder="Optional assignment instructions…"
+            className={textareaClass}
+            {...register('description')}
           />
         </div>
 
