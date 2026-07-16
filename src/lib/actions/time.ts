@@ -105,9 +105,6 @@ export async function closeStaleSessionsForEmployees(
 
 export async function clockIn() {
   const profile  = await requireProfile()
-  if (profile.role !== 'employee') {
-    return { error: 'Only employees can clock in here.' }
-  }
 
   const tz       = resolveTimezone(profile.timezone)
   const supabase = await createClient()
