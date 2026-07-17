@@ -3,6 +3,7 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { closeStaleSessionsForEmployees } from '@/lib/actions/time'
 import { TeamTimeTable, type EmployeeTimeStats } from '@/components/time/TeamTimeTable'
+import { PendingNotesPanel, type PendingNoteRow } from '@/components/time/PendingNotesPanel'
 import {
   startOfMonthInTimezone,
   startOfWeekInTimezone,
@@ -31,6 +32,33 @@ export default async function TeamTimePage() {
   } catch (err) {
     console.error('[TeamTimePage] closeStaleSessionsForEmployees failed:', err)
   }
+
+  const { data: pendingNoteLogs } = await supabase
+    .from('time_logs')
+    .select(`
+      id, log_date, clock_in_note, clock_in_note_status, clock_out_note, clock_out_note_status,
+      employee:profiles!time_logs_employee_id_fkey(id, full_name, employee_code)
+    `)
+    .or('clock_in_note_status.eq.pending,clock_out_note_status.eq.pending')
+    .order('log_date', { ascending: false })
+
+  const pendingNotes: PendingNoteRow[] = []
+  ;(pendingNoteLogs ?? []).forEach((l) => {
+    const emp = l.employee as unknown as { id: string; full_name: string; employee_code: string } | null
+    if (!emp) return
+    if (l.clock_in_note_status === 'pending' && l.clock_in_note) {
+      pendingNotes.push({
+        timeLogId: l.id, employeeName: emp.full_name, employeeCode: emp.employee_code,
+        logDate: l.log_date, field: 'clock_in', note: l.clock_in_note,
+      })
+    }
+    if (l.clock_out_note_status === 'pending' && l.clock_out_note) {
+      pendingNotes.push({
+        timeLogId: l.id, employeeName: emp.full_name, employeeCode: emp.employee_code,
+        logDate: l.log_date, field: 'clock_out', note: l.clock_out_note,
+      })
+    }
+  })
 
   const { data: teams } = await supabase
     .from('teams')
@@ -108,6 +136,8 @@ export default async function TeamTimePage() {
           {' '}Today/week totals use each employee&apos;s timezone.
         </p>
       </div>
+
+      <PendingNotesPanel notes={pendingNotes} />
 
       <TeamTimeTable employees={employeeStats} isAdmin={profile.role === 'admin'} />
     </div>

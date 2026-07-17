@@ -13,7 +13,7 @@ const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password'])
 const ADMIN_PREFIXES = ['/api/admin', '/admin', '/companies', '/settings', '/crm']
 
 // Paths that require role = 'admin' OR 'manager'
-const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/projects', '/clients', '/reports']
+const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports']
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true

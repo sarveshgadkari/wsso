@@ -441,6 +441,10 @@ export type Database = {
           clock_in_source: 'manual' | 'login'
           log_date: string                  // set by trigger from clock_in_at
           created_at: string
+          clock_in_note: string | null
+          clock_in_note_status: Database['public']['Enums']['note_review_status'] | null
+          clock_out_note: string | null
+          clock_out_note_status: Database['public']['Enums']['note_review_status'] | null
         }
         Insert: {
           id?: string
@@ -452,6 +456,10 @@ export type Database = {
           auto_closed?: boolean
           clock_in_source?: 'manual' | 'login'
           created_at?: string
+          clock_in_note?: string | null
+          clock_in_note_status?: Database['public']['Enums']['note_review_status'] | null
+          clock_out_note?: string | null
+          clock_out_note_status?: Database['public']['Enums']['note_review_status'] | null
         }
         Update: {
           id?: string
@@ -462,11 +470,66 @@ export type Database = {
           closed_reason?: Database['public']['Enums']['clock_close_reason'] | null
           auto_closed?: boolean
           clock_in_source?: 'manual' | 'login'
+          clock_in_note?: string | null
+          clock_in_note_status?: Database['public']['Enums']['note_review_status'] | null
+          clock_out_note?: string | null
+          clock_out_note_status?: Database['public']['Enums']['note_review_status'] | null
         }
         Relationships: [
           {
             foreignKeyName: 'time_logs_employee_id_fkey'
             columns: ['employee_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      leave_requests: {
+        Row: {
+          id:              string
+          employee_id:     string
+          start_date:      string
+          end_date:        string
+          half_day:        boolean
+          half_day_period: Database['public']['Enums']['half_day_period'] | null
+          reason:          string
+          status:          Database['public']['Enums']['leave_status']
+          reviewed_by:     string | null
+          reviewed_at:     string | null
+          review_note:     string | null
+          created_at:      string
+        }
+        Insert: {
+          id?:              string
+          employee_id:      string
+          start_date:       string
+          end_date:         string
+          half_day?:        boolean
+          half_day_period?: Database['public']['Enums']['half_day_period'] | null
+          reason:           string
+          status?:          Database['public']['Enums']['leave_status']
+          reviewed_by?:     string | null
+          reviewed_at?:     string | null
+          review_note?:     string | null
+          created_at?:      string
+        }
+        Update: {
+          status?:      Database['public']['Enums']['leave_status']
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          review_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'leave_requests_employee_id_fkey'
+            columns: ['employee_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'leave_requests_reviewed_by_fkey'
+            columns: ['reviewed_by']
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -1019,6 +1082,9 @@ export type Database = {
       client_status: 'active' | 'inactive'
       clock_close_reason: 'manual' | 'auto_logout' | 'admin_correction'
       lead_status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
+      note_review_status: 'pending' | 'approved' | 'rejected'
+      leave_status: 'pending' | 'approved' | 'rejected'
+      half_day_period: 'morning' | 'afternoon'
     }
 
     CompositeTypes: Record<string, never>

@@ -18,6 +18,8 @@ import {
   Megaphone,
   Handshake,
   UserCheck,
+  CalendarOff,
+  CalendarCheck,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -72,6 +74,8 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'My Time',   href: '/time',      icon: Clock },
       { label: 'Team Time', href: '/time/team', icon: CalendarClock, roles: ['admin', 'manager'] },
+      { label: 'My Leave',   href: '/leave',      icon: CalendarOff },
+      { label: 'Team Leave', href: '/leave/team', icon: CalendarCheck, roles: ['admin', 'manager'] },
     ],
   },
   {
@@ -110,10 +114,11 @@ export const DASHBOARD_PATHS = [
   '/settings',
   '/crm',
   '/my-leads',
+  '/leave',
 ]
 
 /** Paths accessible only to admin/manager in the middleware */
-export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/projects', '/clients', '/reports']
+export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports']
 
 /** Paths accessible only to admin in the middleware */
 export const ADMIN_ONLY_PATHS = ['/companies', '/settings', '/api/admin', '/crm']

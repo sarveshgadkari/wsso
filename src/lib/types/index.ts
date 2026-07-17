@@ -23,6 +23,7 @@ export type TacticTask       = Tables['tactic_tasks']['Row']
 export type TacticNextStep   = Tables['tactic_next_steps']['Row']
 export type Lead             = Tables['leads']['Row']
 export type LeadAssignment   = Tables['lead_assignments']['Row']
+export type LeaveRequest     = Tables['leave_requests']['Row']
 
 // Insert shapes (id/created_at optional)
 export type InsertProfile         = Tables['profiles']['Insert']
@@ -41,6 +42,7 @@ export type InsertTacticTask      = Tables['tactic_tasks']['Insert']
 export type InsertTacticNextStep  = Tables['tactic_next_steps']['Insert']
 export type InsertLead            = Tables['leads']['Insert']
 export type InsertLeadAssignment  = Tables['lead_assignments']['Insert']
+export type InsertLeaveRequest    = Tables['leave_requests']['Insert']
 
 // Update shapes (everything optional)
 export type UpdateProfile         = Tables['profiles']['Update']
@@ -63,6 +65,9 @@ export type TacticStatus     = Enums['tactic_status']
 export type ClientStatus     = Enums['client_status']
 export type ClockCloseReason = Enums['clock_close_reason']
 export type LeadStatus       = Enums['lead_status']
+export type NoteReviewStatus = Enums['note_review_status']
+export type LeaveStatus      = Enums['leave_status']
+export type HalfDayPeriod    = Enums['half_day_period']
 
 // ── Const arrays for UI (select dropdowns, filter chips, etc.) ────────────────
 export const USER_ROLES    = ['admin', 'director', 'manager', 'employee']  as const satisfies UserRole[]
@@ -70,3 +75,4 @@ export const TACTIC_STATUSES = ['assigned', 'in_progress', 'review', 'done', 'ar
 export const TACTIC_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const satisfies TacticPriority[]
 export const PROJECT_STATUSES  = ['active', 'on_hold', 'completed']    as const satisfies ProjectStatus[]
 export const LEAD_STATUSES     = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const satisfies LeadStatus[]
+export const LEAVE_STATUSES    = ['pending', 'approved', 'rejected'] as const satisfies LeaveStatus[]

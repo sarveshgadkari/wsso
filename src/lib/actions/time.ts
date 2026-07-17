@@ -103,7 +103,7 @@ export async function closeStaleSessionsForEmployees(
 
 // ── Clock In (manual — once per local day) ──────────────────────────────────────
 
-export async function clockIn() {
+export async function clockIn(note?: string) {
   const profile  = await requireProfile()
 
   const tz       = resolveTimezone(profile.timezone)
@@ -120,11 +120,15 @@ export async function clockIn() {
 
   await closeStaleOpenSession(profile.id, tz, supabase)
 
+  const trimmedNote = note?.trim() || null
+
   const { data, error } = await supabase
     .from('time_logs')
     .insert({
-      employee_id:     profile.id,
-      clock_in_source: 'manual',
+      employee_id:          profile.id,
+      clock_in_source:      'manual',
+      clock_in_note:        trimmedNote,
+      clock_in_note_status: trimmedNote ? 'pending' : null,
     })
     .select()
     .single()
@@ -142,7 +146,7 @@ export async function clockIn() {
 
 // ── Clock Out ─────────────────────────────────────────────────────────────────
 
-export async function clockOut() {
+export async function clockOut(note?: string) {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
@@ -155,14 +159,68 @@ export async function clockOut() {
 
   if (!session) return { error: 'No open clock-in session found.' }
 
+  const trimmedNote = note?.trim() || null
+
   const { data, error } = await supabase
     .from('time_logs')
-    .update({ clock_out_at: new Date().toISOString(), closed_reason: 'manual' })
+    .update({
+      clock_out_at:          new Date().toISOString(),
+      closed_reason:         'manual',
+      clock_out_note:        trimmedNote,
+      clock_out_note_status: trimmedNote ? 'pending' : null,
+    })
     .eq('id', session.id)
     .select()
     .single()
 
   if (error) return { error: error.message }
+
+  revalidateTimePaths()
+  return { data }
+}
+
+// ── Manager / Admin: approve or reject a clock-in/out note ───────────────────
+
+export async function reviewClockNote(
+  timeLogId: string,
+  field:     'clock_in' | 'clock_out',
+  decision:  'approved' | 'rejected',
+) {
+  const profile = await requireProfile()
+  if (!['admin', 'manager'].includes(profile.role)) return { error: 'Access denied.' }
+
+  const supabase = await createClient()
+  const { data: log } = await supabase
+    .from('time_logs')
+    .select('id, employee_id')
+    .eq('id', timeLogId)
+    .single()
+
+  if (!log) return { error: 'Time log not found or not visible to you.' }
+
+  const update = field === 'clock_in'
+    ? { clock_in_note_status: decision }
+    : { clock_out_note_status: decision }
+
+  const { data, error } = await supabaseAdmin
+    .from('time_logs')
+    .update(update)
+    .eq('id', timeLogId)
+    .select()
+    .single()
+
+  if (error) return { error: error.message }
+
+  await supabaseAdmin.from('activity_logs').insert({
+    tactic_id:   null,
+    employee_id: log.employee_id,
+    action:      `time_log.${field}_note_${decision}`,
+    meta: {
+      reviewed_by:      profile.id,
+      reviewed_by_name: profile.full_name,
+      time_log_id:      timeLogId,
+    },
+  })
 
   revalidateTimePaths()
   return { data }
