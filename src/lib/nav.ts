@@ -16,6 +16,8 @@ import {
   Settings,
   Table2,
   Megaphone,
+  Handshake,
+  UserCheck,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -59,6 +61,13 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'CRM',
+    items: [
+      { label: 'CRM',       href: '/crm',      icon: Handshake, roles: ['admin'] },
+      { label: 'My Leads',  href: '/my-leads', icon: UserCheck },
+    ],
+  },
+  {
     title: 'Time',
     items: [
       { label: 'My Time',   href: '/time',      icon: Clock },
@@ -99,10 +108,12 @@ export const DASHBOARD_PATHS = [
   '/announcements',
   '/notifications',
   '/settings',
+  '/crm',
+  '/my-leads',
 ]
 
 /** Paths accessible only to admin/manager in the middleware */
 export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/projects', '/clients', '/reports']
 
 /** Paths accessible only to admin in the middleware */
-export const ADMIN_ONLY_PATHS = ['/companies', '/settings', '/api/admin']
+export const ADMIN_ONLY_PATHS = ['/companies', '/settings', '/api/admin', '/crm']

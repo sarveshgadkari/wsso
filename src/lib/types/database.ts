@@ -811,6 +811,86 @@ export type Database = {
         ]
       }
 
+      leads: {
+        Row: {
+          id:           string
+          website_name: string
+          website_url:  string
+          first_name:   string
+          last_name:    string
+          email:        string
+          company:      string | null
+          inquiry_type: string | null
+          message:      string
+          source:       string | null
+          page_path:    string | null
+          status:       Database['public']['Enums']['lead_status']
+          created_at:   string
+        }
+        Insert: {
+          id?:           string
+          website_name:  string
+          website_url:   string
+          first_name:    string
+          last_name:     string
+          email:         string
+          company?:      string | null
+          inquiry_type?: string | null
+          message:       string
+          source?:       string | null
+          page_path?:    string | null
+          status?:       Database['public']['Enums']['lead_status']
+          created_at?:   string
+        }
+        Update: {
+          status?: Database['public']['Enums']['lead_status']
+        }
+        Relationships: []
+      }
+
+      lead_assignments: {
+        Row: {
+          id:          string
+          lead_id:     string
+          employee_id: string
+          assigned_by: string
+          created_at:  string
+        }
+        Insert: {
+          id?:          string
+          lead_id:      string
+          employee_id:  string
+          assigned_by:  string
+          created_at?:  string
+        }
+        Update: {
+          id?:          string
+          lead_id?:     string
+          employee_id?: string
+          assigned_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lead_assignments_lead_id_fkey'
+            columns: ['lead_id']
+            referencedRelation: 'leads'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lead_assignments_employee_id_fkey'
+            columns: ['employee_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lead_assignments_assigned_by_fkey'
+            columns: ['assigned_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       tactic_tasks: {
         Row: {
           id: string
@@ -938,6 +1018,7 @@ export type Database = {
       tactic_status: 'assigned' | 'in_progress' | 'review' | 'done' | 'archived'
       client_status: 'active' | 'inactive'
       clock_close_reason: 'manual' | 'auto_logout' | 'admin_correction'
+      lead_status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
     }
 
     CompositeTypes: Record<string, never>

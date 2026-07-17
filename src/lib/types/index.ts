@@ -21,6 +21,8 @@ export type TacticDocument   = Tables['tactic_documents']['Row']
 export type EmployeeWorkSheet = Tables['employee_work_sheets']['Row']
 export type TacticTask       = Tables['tactic_tasks']['Row']
 export type TacticNextStep   = Tables['tactic_next_steps']['Row']
+export type Lead             = Tables['leads']['Row']
+export type LeadAssignment   = Tables['lead_assignments']['Row']
 
 // Insert shapes (id/created_at optional)
 export type InsertProfile         = Tables['profiles']['Insert']
@@ -37,6 +39,8 @@ export type InsertNotification    = Tables['notifications']['Insert']
 export type InsertTacticDocument  = Tables['tactic_documents']['Insert']
 export type InsertTacticTask      = Tables['tactic_tasks']['Insert']
 export type InsertTacticNextStep  = Tables['tactic_next_steps']['Insert']
+export type InsertLead            = Tables['leads']['Insert']
+export type InsertLeadAssignment  = Tables['lead_assignments']['Insert']
 
 // Update shapes (everything optional)
 export type UpdateProfile         = Tables['profiles']['Update']
@@ -58,9 +62,11 @@ export type TacticPriority   = Enums['tactic_priority']
 export type TacticStatus     = Enums['tactic_status']
 export type ClientStatus     = Enums['client_status']
 export type ClockCloseReason = Enums['clock_close_reason']
+export type LeadStatus       = Enums['lead_status']
 
 // ── Const arrays for UI (select dropdowns, filter chips, etc.) ────────────────
 export const USER_ROLES    = ['admin', 'director', 'manager', 'employee']  as const satisfies UserRole[]
 export const TACTIC_STATUSES = ['assigned', 'in_progress', 'review', 'done', 'archived'] as const satisfies TacticStatus[]
 export const TACTIC_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const satisfies TacticPriority[]
 export const PROJECT_STATUSES  = ['active', 'on_hold', 'completed']    as const satisfies ProjectStatus[]
+export const LEAD_STATUSES     = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const satisfies LeadStatus[]

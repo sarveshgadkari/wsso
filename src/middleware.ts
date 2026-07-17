@@ -10,7 +10,7 @@ const PUBLIC_PREFIXES = ['/auth/', '/api/public/']
 const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password'])
 
 // Paths that require role = 'admin'
-const ADMIN_PREFIXES = ['/api/admin', '/admin', '/companies', '/settings']
+const ADMIN_PREFIXES = ['/api/admin', '/admin', '/companies', '/settings', '/crm']
 
 // Paths that require role = 'admin' OR 'manager'
 const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/projects', '/clients', '/reports']
