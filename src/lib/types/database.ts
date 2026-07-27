@@ -959,6 +959,8 @@ export type Database = {
           id: string
           title: string
           description: string | null
+          body_content: string | null
+          links: { title: string; url: string }[]
           sequence_order: number
           file_path: string | null
           file_name: string | null
@@ -975,6 +977,8 @@ export type Database = {
           id?: string
           title: string
           description?: string | null
+          body_content?: string | null
+          links?: { title: string; url: string }[]
           sequence_order?: number
           file_path?: string | null
           file_name?: string | null
@@ -991,6 +995,8 @@ export type Database = {
           id?: string
           title?: string
           description?: string | null
+          body_content?: string | null
+          links?: { title: string; url: string }[]
           sequence_order?: number
           file_path?: string | null
           file_name?: string | null

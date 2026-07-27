@@ -22,8 +22,8 @@ import {
   type ModuleWithProgress,
   type AdminProgressRow,
   type QuestionInput,
-  type QuizOption,
 } from '@/lib/actions/training'
+import { normalizeQuizOptions } from '@/lib/training/quiz'
 import type { TrainingQuestion } from '@/lib/types'
 
 type Tab = 'learn' | 'manage' | 'progress'
@@ -215,6 +215,10 @@ function LearnerList({ modules }: { modules: ModuleWithProgress[] }) {
                       {m.file_size ? ` · ${formatBytes(m.file_size)}` : ''}
                     </span>
                   )}
+                  {m.body_content && <span>Written content</span>}
+                  {Array.isArray(m.links) && m.links.length > 0 && (
+                    <span>{m.links.length} link{m.links.length === 1 ? '' : 's'}</span>
+                  )}
                   {started && !done && (
                     <span className="inline-flex items-center gap-1 text-amber-600">
                       <Clock className="h-3.5 w-3.5" /> Continue
@@ -230,6 +234,59 @@ function LearnerList({ modules }: { modules: ModuleWithProgress[] }) {
   )
 }
 
+function LinksEditor({
+  links,
+  onChange,
+}: {
+  links: { title: string; url: string }[]
+  onChange: (links: { title: string; url: string }[]) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-sm font-medium text-neutral-700">Resource links (optional)</label>
+      <p className="text-xs text-neutral-500">Paste YouTube, Notion, Drive, or any https links.</p>
+      {links.map((link, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            placeholder="Label (optional)"
+            className="w-36 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            value={link.title}
+            onChange={e => {
+              const v = e.target.value
+              onChange(links.map((l, j) => j === i ? { ...l, title: v } : l))
+            }}
+          />
+          <input
+            type="url"
+            placeholder="https://…"
+            className="min-w-[200px] flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            value={link.url}
+            onChange={e => {
+              const v = e.target.value
+              onChange(links.map((l, j) => j === i ? { ...l, url: v } : l))
+            }}
+          />
+          <button
+            type="button"
+            className="text-xs text-danger-600 hover:underline"
+            onClick={() => onChange(links.filter((_, j) => j !== i))}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="self-start text-xs font-medium text-primary-600 hover:underline"
+        onClick={() => onChange([...links, { title: '', url: '' }])}
+      >
+        + Add link
+      </button>
+    </div>
+  )
+}
+
 function CreateModuleButton({
   onCreated,
 }: {
@@ -239,6 +296,8 @@ function CreateModuleButton({
   const [loading, setLoading] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [bodyContent, setBodyContent] = useState('')
+  const [links, setLinks] = useState<{ title: string; url: string }[]>([])
   const [hasTest, setHasTest] = useState(false)
   const [passPercent, setPassPercent] = useState(80)
   const [file, setFile] = useState<File | null>(null)
@@ -251,6 +310,8 @@ function CreateModuleButton({
       const fd = new FormData()
       fd.set('title', title)
       fd.set('description', description)
+      fd.set('body_content', bodyContent)
+      fd.set('links', JSON.stringify(links.filter(l => l.url.trim())))
       fd.set('has_test', hasTest ? 'true' : 'false')
       fd.set('pass_percent', String(passPercent))
       fd.set('is_published', 'true')
@@ -260,6 +321,8 @@ function CreateModuleButton({
       setOpen(false)
       setTitle('')
       setDescription('')
+      setBodyContent('')
+      setLinks([])
       setHasTest(false)
       setFile(null)
     } catch (err) {
@@ -275,8 +338,14 @@ function CreateModuleButton({
         <Plus className="h-3.5 w-3.5" />
         Add module
       </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} title="New training module" size="lg">
-        <form onSubmit={submit} className="flex flex-col gap-4">
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="New training module"
+        size="xl"
+        description="Upload a file, write training text, and/or paste links — use any combination."
+      >
+        <form onSubmit={submit} className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <Input
             label="Title *"
             value={title}
@@ -285,17 +354,28 @@ function CreateModuleButton({
             required
           />
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-neutral-700">Description</label>
+            <label className="text-sm font-medium text-neutral-700">Short summary</label>
             <textarea
-              rows={3}
+              rows={2}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="What learners should know after this module…"
+              placeholder="Brief overview shown in the module list…"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-neutral-700">Material (PDF, PPT, DOC…)</label>
+            <label className="text-sm font-medium text-neutral-700">Training content (write manually)</label>
+            <textarea
+              rows={8}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              value={bodyContent}
+              onChange={e => setBodyContent(e.target.value)}
+              placeholder={"Write the full training material here…\n\nYou can include steps, notes, policies, etc."}
+            />
+          </div>
+          <LinksEditor links={links} onChange={setLinks} />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-neutral-700">Or upload a file (PDF, PPT, DOC…)</label>
             <input
               type="file"
               accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
@@ -400,7 +480,12 @@ function AdminManageList({
               {m.has_test && <Badge variant="info">{m.question_count} Qs</Badge>}
             </div>
             <p className="truncate text-xs text-neutral-400">
-              {m.file_name ?? 'No file'} {m.description ? `· ${m.description.slice(0, 60)}` : ''}
+              {[
+                m.file_name,
+                m.body_content ? 'Text content' : null,
+                Array.isArray(m.links) && m.links.length ? `${m.links.length} link(s)` : null,
+                m.description ? m.description.slice(0, 40) : null,
+              ].filter(Boolean).join(' · ') || 'No material yet'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1">
@@ -469,6 +554,10 @@ function EditModuleButton({
   const [loading, setLoading] = useState(false)
   const [title, setTitle] = useState(m.title)
   const [description, setDescription] = useState(m.description ?? '')
+  const [bodyContent, setBodyContent] = useState(m.body_content ?? '')
+  const [links, setLinks] = useState<{ title: string; url: string }[]>(
+    Array.isArray(m.links) ? m.links.map(l => ({ ...l })) : [],
+  )
   const [passPercent, setPassPercent] = useState(m.pass_percent)
   const toast = useToast()
 
@@ -476,12 +565,21 @@ function EditModuleButton({
     e.preventDefault()
     setLoading(true)
     try {
+      const cleanedLinks = links.filter(l => l.url.trim())
       await updateTrainingModule(m.id, {
         title,
         description,
+        body_content: bodyContent,
+        links: cleanedLinks,
         pass_percent: passPercent,
       })
-      onSaved({ title, description, pass_percent: passPercent })
+      onSaved({
+        title,
+        description,
+        body_content: bodyContent || null,
+        links: cleanedLinks,
+        pass_percent: passPercent,
+      })
       setOpen(false)
       toast.success('Saved')
     } catch (err) {
@@ -496,23 +594,36 @@ function EditModuleButton({
       <Button size="sm" variant="ghost" type="button" onClick={() => {
         setTitle(m.title)
         setDescription(m.description ?? '')
+        setBodyContent(m.body_content ?? '')
+        setLinks(Array.isArray(m.links) ? m.links.map(l => ({ ...l })) : [])
         setPassPercent(m.pass_percent)
         setOpen(true)
       }}>
         <Pencil className="h-3.5 w-3.5" />
       </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} title="Edit module" size="lg">
-        <form onSubmit={submit} className="flex flex-col gap-4">
+      <Dialog open={open} onClose={() => setOpen(false)} title="Edit module" size="xl">
+        <form onSubmit={submit} className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <Input label="Title *" value={title} onChange={e => setTitle(e.target.value)} required />
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-neutral-700">Description</label>
+            <label className="text-sm font-medium text-neutral-700">Short summary</label>
             <textarea
-              rows={3}
+              rows={2}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               value={description}
               onChange={e => setDescription(e.target.value)}
             />
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-neutral-700">Training content (write manually)</label>
+            <textarea
+              rows={8}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              value={bodyContent}
+              onChange={e => setBodyContent(e.target.value)}
+              placeholder="Write the full training material here…"
+            />
+          </div>
+          <LinksEditor links={links} onChange={setLinks} />
           <Input
             label="Pass score (%)"
             type="number"
@@ -535,8 +646,8 @@ function emptyQuestion(): QuestionInput {
   return {
     question_text: '',
     options: [
-      { id: 'a', text: '', is_correct: true },
-      { id: 'b', text: '', is_correct: false },
+      { id: `opt-${Date.now()}-a`, text: '', is_correct: true },
+      { id: `opt-${Date.now()}-b`, text: '', is_correct: false },
     ],
   }
 }
@@ -561,7 +672,7 @@ function QuestionsEditorButton({
       if (existing.length) {
         setQuestions(existing.map((q: TrainingQuestion) => ({
           question_text: q.question_text,
-          options: (q.options as QuizOption[]).map(o => ({ ...o })),
+          options: normalizeQuizOptions(q.options).map(o => ({ ...o })),
         })))
       } else {
         setQuestions([emptyQuestion()])
@@ -622,8 +733,16 @@ function QuestionsEditorButton({
                 }}
               />
               <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-neutral-500">
+                  Select the radio next to the <span className="text-teal-700">correct</span> answer:
+                </p>
                 {q.options.map((opt, oi) => (
-                  <div key={opt.id} className="flex items-center gap-2">
+                  <div
+                    key={opt.id}
+                    className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
+                      opt.is_correct ? 'border-teal-400 bg-teal-50' : 'border-neutral-200'
+                    }`}
+                  >
                     <input
                       type="radio"
                       name={`correct-${qi}`}
@@ -637,13 +756,13 @@ function QuestionsEditorButton({
                           }
                         }))
                       }}
-                      title="Correct answer"
+                      title="Mark as correct answer"
                     />
                     <input
                       type="text"
                       required
                       placeholder={`Option ${String.fromCharCode(65 + oi)}`}
-                      className="flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                      className="flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm"
                       value={opt.text}
                       onChange={e => {
                         const v = e.target.value
@@ -656,6 +775,11 @@ function QuestionsEditorButton({
                         }))
                       }}
                     />
+                    {opt.is_correct && (
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-teal-700">
+                        Correct
+                      </span>
+                    )}
                     {q.options.length > 2 && (
                       <button
                         type="button"
@@ -683,7 +807,7 @@ function QuestionsEditorButton({
                     onClick={() => {
                       setQuestions(prev => prev.map((x, i) => {
                         if (i !== qi) return x
-                        const id = String.fromCharCode(97 + x.options.length)
+                        const id = `q${qi}-opt${x.options.length}`
                         return {
                           ...x,
                           options: [...x.options, { id, text: '', is_correct: false }],

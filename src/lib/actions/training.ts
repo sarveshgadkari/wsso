@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import type { TrainingModule, TrainingProgress, TrainingQuestion } from '@/lib/types'
 import type { Database } from '@/lib/types/database'
+import { normalizeQuizOptions, normalizeTrainingLinks, normalizeLinkUrl } from '@/lib/training/quiz'
+import type { QuestionInput, QuizOption, QuizOptionPublic, TrainingLink } from '@/lib/training/quiz'
 
 const BUCKET = 'training'
 const MAX_FILE_BYTES = 50 * 1024 * 1024
@@ -14,13 +16,7 @@ const ALLOWED_EXT = new Set([
   'xls', 'xlsx', 'txt', 'png', 'jpg', 'jpeg',
 ])
 
-export type QuizOption = { id: string; text: string; is_correct: boolean }
-export type QuizOptionPublic = { id: string; text: string }
-
-export type QuestionInput = {
-  question_text: string
-  options: QuizOption[]
-}
+export type { QuestionInput, QuizOption, QuizOptionPublic, TrainingLink }
 
 export type ModuleWithProgress = TrainingModule & {
   progress: TrainingProgress | null
@@ -135,12 +131,15 @@ export async function getTrainingModule(id: string): Promise<{
       .order('order_no'),
   ])
 
-  const questionsPublic = (questions ?? []).map(q => ({
-    id: q.id as string,
-    question_text: q.question_text as string,
-    order_no: q.order_no as number,
-    options: ((q.options as QuizOption[]) ?? []).map(o => ({ id: o.id, text: o.text })),
-  }))
+  const questionsPublic = (questions ?? []).map(q => {
+    const opts = normalizeQuizOptions(q.options)
+    return {
+      id: q.id as string,
+      question_text: q.question_text as string,
+      order_no: q.order_no as number,
+      options: opts.map(o => ({ id: o.id, text: o.text })),
+    }
+  })
 
   return {
     module: mod as TrainingModule,
@@ -313,7 +312,7 @@ export async function completeTrainingModule(moduleId: string) {
 export async function submitTrainingTest(
   moduleId: string,
   answers: { question_id: string; option_id: string }[],
-): Promise<{ passed: boolean; score: number; pass_percent: number }> {
+): Promise<{ passed: boolean; score: number; pass_percent: number; correct_count: number; total: number }> {
   const profile = await requireProfile()
 
   const { data: mod } = await supabaseAdmin
@@ -330,19 +329,36 @@ export async function submitTrainingTest(
     .select('id, options')
     .eq('module_id', moduleId)
 
-  const qs = (questions ?? []) as Pick<TrainingQuestion, 'id' | 'options'>[]
+  const qs = questions ?? []
   if (!qs.length) throw new Error('No questions configured')
 
-  const answerMap = new Map(answers.map(a => [a.question_id, a.option_id]))
+  const answerMap = new Map(
+    (answers ?? [])
+      .filter(a => a?.question_id && a?.option_id)
+      .map(a => [String(a.question_id), String(a.option_id)]),
+  )
+
   let correct = 0
+  let configuredCorrect = 0
   for (const q of qs) {
-    const chosen = answerMap.get(q.id)
-    const opts = (q.options as QuizOption[]) ?? []
+    const chosen = answerMap.get(String(q.id))
+    const opts = normalizeQuizOptions(q.options)
     const right = opts.find(o => o.is_correct)
-    if (right && chosen === right.id) correct++
+    if (!right) continue
+    configuredCorrect++
+    if (chosen && chosen === right.id) {
+      correct++
+    }
   }
 
-  const score = Math.round((correct / qs.length) * 10000) / 100
+  if (configuredCorrect === 0) {
+    throw new Error(
+      'This knowledge test has no correct answers marked. Please ask an admin to open Manage Modules → quiz icon → select the correct option for each question → Save test.',
+    )
+  }
+
+  const total = qs.length
+  const score = total > 0 ? Math.round((correct / total) * 100) : 0
   const passed = score >= mod.pass_percent
   const now = new Date().toISOString()
 
@@ -377,7 +393,7 @@ export async function submitTrainingTest(
 
   revalidateTraining()
   revalidatePath(`/training/${moduleId}`)
-  return { passed, score, pass_percent: mod.pass_percent }
+  return { passed, score, pass_percent: mod.pass_percent, correct_count: correct, total }
 }
 
 // ── Admin actions ─────────────────────────────────────────────────────────────
@@ -388,12 +404,25 @@ export async function createTrainingModule(formData: FormData) {
 
   const title = String(formData.get('title') ?? '').trim()
   const description = String(formData.get('description') ?? '').trim()
+  const bodyContent = String(formData.get('body_content') ?? '').trim()
+  const linksRaw = String(formData.get('links') ?? '[]')
   const hasTest = formData.get('has_test') === 'true' || formData.get('has_test') === 'on'
   const passPercent = Math.min(100, Math.max(1, Number(formData.get('pass_percent') ?? 80) || 80))
   const isPublished = formData.get('is_published') !== 'false'
   const file = formData.get('file') as File | null
 
   if (!title) throw new Error('Title is required')
+
+  let links: TrainingLink[] = []
+  try {
+    links = normalizeTrainingLinks(JSON.parse(linksRaw))
+  } catch {
+    links = []
+  }
+  // Re-normalize URLs from form (may lack protocol)
+  links = links
+    .map(l => ({ title: l.title.trim() || l.url, url: normalizeLinkUrl(l.url) }))
+    .filter(l => /^https?:\/\//i.test(l.url))
 
   const { data: maxRow } = await supabaseAdmin
     .from('training_modules')
@@ -428,11 +457,17 @@ export async function createTrainingModule(formData: FormData) {
     if (upErr) throw new Error(upErr.message)
   }
 
+  if (!file_path && !bodyContent && !links.length && !description) {
+    throw new Error('Add training text, a file, a link, or a short description')
+  }
+
   const { data, error } = await supabaseAdmin
     .from('training_modules')
     .insert({
       title,
       description: description || null,
+      body_content: bodyContent || null,
+      links,
       sequence_order,
       file_path,
       file_name,
@@ -460,6 +495,8 @@ export async function updateTrainingModule(
   input: {
     title?: string
     description?: string | null
+    body_content?: string | null
+    links?: TrainingLink[]
     has_test?: boolean
     pass_percent?: number
     is_published?: boolean
@@ -474,6 +511,15 @@ export async function updateTrainingModule(
     patch.title = t
   }
   if (input.description !== undefined) patch.description = input.description?.trim() || null
+  if (input.body_content !== undefined) patch.body_content = input.body_content?.trim() || null
+  if (input.links !== undefined) {
+    patch.links = input.links
+      .map(l => ({
+        title: (l.title || l.url).trim(),
+        url: normalizeLinkUrl(l.url),
+      }))
+      .filter(l => /^https?:\/\//i.test(l.url))
+  }
   if (input.has_test !== undefined) patch.has_test = input.has_test
   if (input.pass_percent !== undefined) {
     patch.pass_percent = Math.min(100, Math.max(1, input.pass_percent))
@@ -597,16 +643,23 @@ export async function saveTrainingQuestions(moduleId: string, questions: Questio
   if (delErr) throw new Error(delErr.message)
 
   if (questions.length) {
-    const rows = questions.map((q, i) => ({
-      module_id: moduleId,
-      question_text: q.question_text.trim(),
-      options: q.options.map((o, j) => ({
-        id: o.id || String.fromCharCode(97 + j),
+    const rows = questions.map((q, i) => {
+      const options = q.options.map((o, j) => ({
+        id: (o.id && String(o.id).trim()) || `q${i}-opt${j}`,
         text: o.text.trim(),
-        is_correct: o.is_correct,
-      })),
-      order_no: i + 1,
-    }))
+        is_correct: Boolean(o.is_correct),
+      }))
+      // Guarantee exactly one correct after normalize
+      if (!options.some(o => o.is_correct) && options[0]) {
+        options[0].is_correct = true
+      }
+      return {
+        module_id: moduleId,
+        question_text: q.question_text.trim(),
+        options,
+        order_no: i + 1,
+      }
+    })
     const { error } = await supabaseAdmin.from('training_questions').insert(rows)
     if (error) throw new Error(error.message)
   }

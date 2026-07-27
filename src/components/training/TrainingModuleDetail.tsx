@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, CheckCircle2, FileText, ExternalLink, ClipboardCheck,
+  ArrowLeft, CheckCircle2, FileText, ExternalLink, ClipboardCheck, Link2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -16,6 +16,7 @@ import {
   getTrainingFileUrl,
   type QuizOptionPublic,
 } from '@/lib/actions/training'
+import { normalizeTrainingLinks } from '@/lib/training/quiz'
 import type { TrainingModule, TrainingProgress } from '@/lib/types'
 
 interface Props {
@@ -37,9 +38,35 @@ export function TrainingModuleDetail({ module, progress: initialProgress, questi
   const [opening, setOpening] = useState(false)
   const [showTest, setShowTest] = useState(false)
   const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [result, setResult] = useState<{ passed: boolean; score: number; pass_percent: number } | null>(null)
+  const [result, setResult] = useState<{
+    passed: boolean
+    score: number
+    pass_percent: number
+    correct_count: number
+    total: number
+  } | null>(null)
 
   const done = progress?.status === 'completed'
+  const links = normalizeTrainingLinks(module.links)
+
+  async function markStarted() {
+    try {
+      await startTrainingModule(module.id)
+      setProgress(prev => prev ?? {
+        id: '',
+        module_id: module.id,
+        employee_id: '',
+        status: 'in_progress',
+        test_score: null,
+        test_passed: null,
+        started_at: new Date().toISOString(),
+        completed_at: null,
+      })
+      router.refresh()
+    } catch {
+      // non-blocking
+    }
+  }
 
   async function openFile() {
     setOpening(true)
@@ -98,10 +125,11 @@ export function TrainingModuleDetail({ module, progress: initialProgress, questi
     }
     setLoading(true)
     try {
-      const res = await submitTrainingTest(
-        module.id,
-        Object.entries(answers).map(([question_id, option_id]) => ({ question_id, option_id })),
-      )
+      const payload = questions.map(q => ({
+        question_id: String(q.id),
+        option_id: String(answers[q.id]),
+      }))
+      const res = await submitTrainingTest(module.id, payload)
       setResult(res)
       if (res.passed) {
         setProgress(prev => ({
@@ -116,9 +144,11 @@ export function TrainingModuleDetail({ module, progress: initialProgress, questi
           test_passed: true,
           completed_at: new Date().toISOString(),
         }))
-        toast.success(`Passed with ${res.score}%`)
+        toast.success(`Passed — ${res.correct_count}/${res.total} correct (${res.score}%)`)
       } else {
-        toast.error(`Score ${res.score}% — need ${res.pass_percent}% to pass. Try again.`)
+        toast.error(
+          `Score ${res.score}% (${res.correct_count}/${res.total} correct). Need ${res.pass_percent}% to pass.`,
+        )
       }
       router.refresh()
     } catch (err) {
@@ -173,23 +203,73 @@ export function TrainingModuleDetail({ module, progress: initialProgress, questi
 
       <div className="card p-5">
         <h3 className="mb-3 text-sm font-semibold text-neutral-800">Training material</h3>
-        {module.file_path ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-neutral-500" />
-              <div>
-                <p className="text-sm font-medium text-neutral-800">{module.file_name}</p>
-                <p className="text-xs text-neutral-400">{module.file_type}</p>
-              </div>
+
+        {module.body_content && (
+          <div className="mb-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Written content
+            </p>
+            <div
+              className="whitespace-pre-wrap rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm leading-relaxed text-neutral-800"
+              onFocus={markStarted}
+              onMouseEnter={() => { if (!progress) void markStarted() }}
+            >
+              {module.body_content}
             </div>
-            <Button size="sm" onClick={openFile} loading={opening}>
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open
-            </Button>
           </div>
-        ) : (
-          <p className="text-sm text-neutral-500">No file attached — follow the description above.</p>
         )}
+
+        {links.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Links
+            </p>
+            <ul className="flex flex-col gap-2">
+              {links.map((link, i) => (
+                <li key={`${link.url}-${i}`}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => { void markStarted() }}
+                    className="flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-primary-700 hover:bg-primary-50"
+                  >
+                    <Link2 className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 truncate font-medium">{link.title || link.url}</span>
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-neutral-400" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {module.file_path ? (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              File
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-neutral-500" />
+                <div>
+                  <p className="text-sm font-medium text-neutral-800">{module.file_name}</p>
+                  <p className="text-xs text-neutral-400">{module.file_type}</p>
+                </div>
+              </div>
+              <Button size="sm" onClick={openFile} loading={opening}>
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open
+              </Button>
+            </div>
+          </div>
+        ) : !module.body_content && !links.length ? (
+          <p className="text-sm text-neutral-500">
+            {module.description
+              ? 'No extra material — follow the summary above.'
+              : 'No material attached yet.'}
+          </p>
+        ) : null}
       </div>
 
       {!done && (
@@ -213,30 +293,36 @@ export function TrainingModuleDetail({ module, progress: initialProgress, questi
                         {i + 1}. {q.question_text}
                       </legend>
                       <div className="mt-2 flex flex-col gap-2">
-                        {q.options.map(opt => (
+                        {q.options.map((opt, oi) => {
+                          const optId = opt.id || `opt-${oi}`
+                          return (
                           <label
-                            key={opt.id}
+                            key={optId}
                             className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${
-                              answers[q.id] === opt.id
+                              answers[q.id] === optId
                                 ? 'border-teal-400 bg-teal-50'
                                 : 'border-neutral-200 hover:bg-neutral-50'
                             }`}
                           >
                             <input
                               type="radio"
-                              name={q.id}
-                              checked={answers[q.id] === opt.id}
-                              onChange={() => setAnswers(prev => ({ ...prev, [q.id]: opt.id }))}
+                              name={`q-${q.id}`}
+                              value={optId}
+                              checked={answers[q.id] === optId}
+                              onChange={() => setAnswers(prev => ({ ...prev, [q.id]: optId }))}
                             />
                             {opt.text}
                           </label>
-                        ))}
+                          )
+                        })}
                       </div>
                     </fieldset>
                   ))}
-                  {result && !result.passed && (
-                    <p className="text-sm text-danger-600">
-                      You scored {result.score}%. Need {result.pass_percent}% to pass.
+                  {result && (
+                    <p className={`text-sm ${result.passed ? 'text-teal-700' : 'text-danger-600'}`}>
+                      {result.passed ? 'Passed' : 'Not passed'} — {result.correct_count}/{result.total} correct
+                      ({result.score}%). Pass mark: {result.pass_percent}%.
+                      {!result.passed && ' You can change answers and try again.'}
                     </p>
                   )}
                   <Button type="submit" loading={loading}>Submit answers</Button>
