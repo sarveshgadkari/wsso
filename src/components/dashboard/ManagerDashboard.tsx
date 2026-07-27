@@ -6,6 +6,7 @@ import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
+import { TrainingDashboardCard } from '@/components/training/TrainingDashboardCard'
 import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { getProfile } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
@@ -209,6 +210,8 @@ export async function ManagerDashboard() {
       </div>
 
       <MyWorkDashboardCard />
+
+      <TrainingDashboardCard />
 
       <AnnouncementsDashboardCard />
 

@@ -954,6 +954,145 @@ export type Database = {
         ]
       }
 
+      training_modules: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          sequence_order: number
+          file_path: string | null
+          file_name: string | null
+          file_type: string | null
+          file_size: number | null
+          has_test: boolean
+          pass_percent: number
+          is_published: boolean
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          sequence_order?: number
+          file_path?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          file_size?: number | null
+          has_test?: boolean
+          pass_percent?: number
+          is_published?: boolean
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          sequence_order?: number
+          file_path?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          file_size?: number | null
+          has_test?: boolean
+          pass_percent?: number
+          is_published?: boolean
+          created_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'training_modules_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      training_questions: {
+        Row: {
+          id: string
+          module_id: string
+          question_text: string
+          options: { id: string; text: string; is_correct: boolean }[]
+          order_no: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          module_id: string
+          question_text: string
+          options?: { id: string; text: string; is_correct: boolean }[]
+          order_no?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          module_id?: string
+          question_text?: string
+          options?: { id: string; text: string; is_correct: boolean }[]
+          order_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'training_questions_module_id_fkey'
+            columns: ['module_id']
+            referencedRelation: 'training_modules'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      training_progress: {
+        Row: {
+          id: string
+          module_id: string
+          employee_id: string
+          status: 'in_progress' | 'completed'
+          test_score: number | null
+          test_passed: boolean | null
+          started_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          module_id: string
+          employee_id: string
+          status?: 'in_progress' | 'completed'
+          test_score?: number | null
+          test_passed?: boolean | null
+          started_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          module_id?: string
+          employee_id?: string
+          status?: 'in_progress' | 'completed'
+          test_score?: number | null
+          test_passed?: boolean | null
+          started_at?: string
+          completed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'training_progress_module_id_fkey'
+            columns: ['module_id']
+            referencedRelation: 'training_modules'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'training_progress_employee_id_fkey'
+            columns: ['employee_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       tactic_tasks: {
         Row: {
           id: string

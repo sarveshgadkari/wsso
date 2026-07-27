@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import type { ComponentType } from 'react'
-import { AlertCircle, Clock, CheckCircle2, CalendarDays, Timer, Table2 } from 'lucide-react'
+import { AlertCircle, Clock, CheckCircle2, CalendarDays, Timer, Table2, GraduationCap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getProfile } from '@/lib/auth/session'
 import { ClockWidget } from '@/components/time/ClockWidget'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
+import { TrainingDashboardCard } from '@/components/training/TrainingDashboardCard'
 import { StatCard } from './StatCard'
 import { Badge } from '@/components/ui/Badge'
 import {
@@ -159,6 +160,8 @@ export async function EmployeeDashboard() {
 
       <MyWorkDashboardCard />
 
+      <TrainingDashboardCard />
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
           label="Today"
@@ -202,6 +205,13 @@ export async function EmployeeDashboard() {
         >
           <Table2 className="h-4 w-4 text-primary-500" />
           My Work
+        </Link>
+        <Link
+          href="/training"
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
+        >
+          <GraduationCap className="h-4 w-4 text-teal-600" />
+          Training
         </Link>
         <Link
           href="/tactics"

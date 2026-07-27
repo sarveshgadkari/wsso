@@ -24,6 +24,9 @@ export type TacticNextStep   = Tables['tactic_next_steps']['Row']
 export type Lead             = Tables['leads']['Row']
 export type LeadAssignment   = Tables['lead_assignments']['Row']
 export type LeaveRequest     = Tables['leave_requests']['Row']
+export type TrainingModule   = Tables['training_modules']['Row']
+export type TrainingQuestion = Tables['training_questions']['Row']
+export type TrainingProgress = Tables['training_progress']['Row']
 
 // Insert shapes (id/created_at optional)
 export type InsertProfile         = Tables['profiles']['Insert']

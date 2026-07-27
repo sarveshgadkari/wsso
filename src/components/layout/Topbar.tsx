@@ -18,6 +18,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/clients',            'Clients'],
   ['/time/team',          'Team Time'],
   ['/time',               'My Time'],
+  ['/training',           'Training'],
   ['/documents',          'Documents'],
   ['/reports',            'Reports'],
   ['/activity-log',       'Activity Log'],

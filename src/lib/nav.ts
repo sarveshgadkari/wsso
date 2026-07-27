@@ -20,6 +20,7 @@ import {
   UserCheck,
   CalendarOff,
   CalendarCheck,
+  GraduationCap,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -81,6 +82,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Content',
     items: [
+      { label: 'Training',       href: '/training',       icon: GraduationCap },
       { label: 'Documents',      href: '/documents',      icon: FileText },
       { label: 'Announcements',  href: '/announcements',  icon: Megaphone },
       { label: 'Reports',        href: '/reports',        icon: BarChart3,  roles: ['admin', 'manager'] },
@@ -106,6 +108,7 @@ export const DASHBOARD_PATHS = [
   '/projects',
   '/clients',
   '/time',
+  '/training',
   '/documents',
   '/reports',
   '/activity-log',

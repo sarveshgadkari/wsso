@@ -10,6 +10,7 @@ import { WeeklyChart, type DayBar } from '@/components/time/WeeklyChart'
 import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
+import { TrainingDashboardCard } from '@/components/training/TrainingDashboardCard'
 import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
 import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel, todayInTimezone } from '@/lib/utils/dates'
@@ -154,6 +155,8 @@ export async function AdminDashboard() {
       </div>
 
       <MyWorkDashboardCard />
+
+      <TrainingDashboardCard />
 
       <AnnouncementsDashboardCard />
 
