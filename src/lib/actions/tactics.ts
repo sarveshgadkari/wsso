@@ -127,7 +127,11 @@ export async function transitionStatus(
   if (fetchErr || !tactic) throw new Error('Tactic not found or access denied')
 
   const currentStatus = tactic.status as TacticStatus
-  const allowed = getAllowedNext(currentStatus, profile.role)
+  const ctx = {
+    isCreator:  tactic.created_by === profile.id,
+    isAssignee: tactic.assigned_to === profile.id,
+  }
+  const allowed = getAllowedNext(currentStatus, profile.role, ctx)
 
   if (!allowed.includes(targetStatus)) {
     throw new Error(

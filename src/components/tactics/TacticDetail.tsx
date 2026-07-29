@@ -169,6 +169,8 @@ export function TacticDetail({
           tacticId={tactic.id}
           currentStatus={status}
           role={role}
+          isCreator={tactic.created_by === currentUserId}
+          isAssignee={tactic.assigned_to === currentUserId}
           pendingWorkNote={pendingWorkNote}
           onWorkNoteConsumed={() => setPendingWorkNote('')}
           onTransitioned={newStatus => {
@@ -178,9 +180,6 @@ export function TacticDetail({
         />
         {status === 'archived' && (
           <p className="text-sm text-neutral-400">This work order has been archived.</p>
-        )}
-        {getAllowedNextLength(status, role) === 0 && status !== 'archived' && (
-          <p className="text-sm text-neutral-400">No actions available for your role on this status.</p>
         )}
       </div>
 
@@ -288,16 +287,3 @@ export function TacticDetail({
   )
 }
 
-// Helper to avoid importing server action in this client component
-function getAllowedNextLength(status: TacticStatus, role: string): number {
-  if (role === 'admin' || role === 'manager') {
-    const map: Record<TacticStatus, number> = {
-      assigned: 1, in_progress: 1, review: 2, done: 1, archived: 0,
-    }
-    return map[status] ?? 0
-  }
-  const map: Record<TacticStatus, number> = {
-    assigned: 1, in_progress: 1, review: 0, done: 0, archived: 0,
-  }
-  return map[status] ?? 0
-}

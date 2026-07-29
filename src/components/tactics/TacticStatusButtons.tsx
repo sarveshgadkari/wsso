@@ -13,6 +13,8 @@ interface Props {
   tacticId:         string
   currentStatus:    TacticStatus
   role:             UserRole
+  isCreator:        boolean
+  isAssignee:       boolean
   pendingWorkNote?: string
   onWorkNoteConsumed?: () => void
   onTransitioned:   (newStatus: TacticStatus) => void
@@ -26,14 +28,14 @@ const ICONS: Partial<Record<TacticStatus, React.ComponentType<{ className?: stri
 }
 
 export function TacticStatusButtons({
-  tacticId, currentStatus, role, pendingWorkNote, onWorkNoteConsumed, onTransitioned,
+  tacticId, currentStatus, role, isCreator, isAssignee, pendingWorkNote, onWorkNoteConsumed, onTransitioned,
 }: Props) {
   const toast = useToast()
   const [isPending, startTransition] = useTransition()
   const [sendBackOpen, setSendBackOpen] = useState(false)
   const [comment,      setComment]      = useState('')
 
-  const allowed = getAllowedNext(currentStatus, role)
+  const allowed = getAllowedNext(currentStatus, role, { isCreator, isAssignee })
   if (allowed.length === 0) return null
 
   function handleClick(target: TacticStatus) {

@@ -181,7 +181,7 @@ interface Props {
   currentUserId:  string
 }
 
-export function KanbanBoard({ initialTactics, role }: Props) {
+export function KanbanBoard({ initialTactics, role, currentUserId }: Props) {
   const toast = useToast()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -246,7 +246,11 @@ export function KanbanBoard({ initialTactics, role }: Props) {
     const currentStatus = tactic.status as TacticStatus
     if (currentStatus === targetStatus) return
 
-    const allowed = getAllowedNext(currentStatus, role)
+    const ctx = {
+      isCreator:  tactic.created_by === currentUserId,
+      isAssignee: tactic.assigned_to === currentUserId,
+    }
+    const allowed = getAllowedNext(currentStatus, role, ctx)
     if (!allowed.includes(targetStatus)) {
       toast.error(`Cannot move from ${STATUS_LABEL[currentStatus]} to ${STATUS_LABEL[targetStatus]}`)
       return
