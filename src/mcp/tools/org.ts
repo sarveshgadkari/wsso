@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getMcpClient } from '../auth'
 import { PaginationSchema, runTool, UuidSchema } from '../helpers'
