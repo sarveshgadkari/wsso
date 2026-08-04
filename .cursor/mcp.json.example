@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "wsso": {
+      "url": "https://wsso.vercel.app/api/mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_SUPABASE_ACCESS_TOKEN"
+      }
+    }
+  }
+}

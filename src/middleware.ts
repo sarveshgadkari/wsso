@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 // Paths that do NOT require auth — everything else does.
 const PUBLIC_PATHS = new Set(['/', '/login', '/forgot-password', '/reset-password'])
 // Prefix-based public paths (e.g. /auth/callback, /auth/signout)
-const PUBLIC_PREFIXES = ['/auth/', '/api/public/']
+const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/']
 
 // Authenticated-but-any-role redirect targets for already-authed users on auth pages
 const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password'])
@@ -17,6 +17,7 @@ const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/leave/team', '/pro
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true
+  if (pathname === '/api/mcp') return true
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
 }
 
