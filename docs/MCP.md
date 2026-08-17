@@ -79,9 +79,16 @@ MCP_URL=https://wsso.vercel.app/api/mcp/mcp npm run test:mcp:manager
 
 ## 2. How users get an access token
 
-Every client needs a **Supabase access token** for a real WSSO user.
+### Easy way for everyone (recommended)
 
-### Easy way (browser after login)
+1. Log in to WSSO in the browser.
+2. Open **Connect AI** in the sidebar (`/connect-ai`).
+3. Click **Copy** on MCP URL, Access token, or Full JSON config.
+4. Paste into Workforce 2.0 / Cursor / your MCP client.
+
+No DevTools required. Click **Refresh** on that page when the token expires.
+
+### Developer way (browser DevTools)
 
 1. Log in to WSSO in the browser.
 2. Open DevTools → Application / Storage → find the Supabase auth session,
@@ -259,11 +266,44 @@ The AI will only access what your account can already see in WSSO.
 
 | Problem | Fix |
 |---|---|
-| `fetch failed` in smoke tests | Start app first: `npm run dev` (or use deployed URL) |
+| `{"error":"invalid_token","error_description":"No authorization provided"}` | **Missing Bearer token.** Do not open the MCP URL in a browser. Put a real Supabase `access_token` in the client config `Authorization` header. |
+| Still `invalid_token` after adding token | You left the placeholder `REPLACE_WITH_SUPABASE_ACCESS_TOKEN`, or the token expired — log in again and copy a fresh `access_token`. |
+| `fetch failed` in smoke tests | Start app first: `npm run dev` (or use the Vercel URL with `MCP_URL`) |
 | `401 Unauthorized` | Token missing/expired — log in again and refresh token |
-| Tools missing in Cursor | Check MCP config URL path ends with `/api/mcp/mcp`, reload MCP |
+| Tools missing in Cursor | Check MCP config URL is exactly `https://wsso.vercel.app/api/mcp/mcp`, reload MCP servers |
 | Employee can see too little | Expected — RLS. Use a manager/admin account if needed |
 | Deployed but 404 | Confirm latest deploy includes `src/app/api/mcp/[transport]/route.ts` |
+
+### Fix this error in Cursor (step by step)
+
+1. Log in at [https://wsso.vercel.app](https://wsso.vercel.app/)
+2. Press `F12` → Console → paste:
+
+```js
+const key = Object.keys(localStorage).find(k => k.includes('auth-token'))
+copy(JSON.parse(localStorage.getItem(key)).access_token)
+```
+
+3. Create/edit `.cursor/mcp.json` (project or user MCP settings):
+
+```json
+{
+  "mcpServers": {
+    "wsso": {
+      "url": "https://wsso.vercel.app/api/mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer PASTE_TOKEN_HERE"
+      }
+    }
+  }
+}
+```
+
+4. Replace `PASTE_TOKEN_HERE` with the copied token (keep the word `Bearer` and a space).
+5. Restart Cursor / reload MCP.
+6. Ask: “Use employees_me and tell me who I am.”
+
+> Opening `https://wsso.vercel.app/api/mcp/mcp` in Chrome will always show `No authorization provided` — that is normal. MCP clients must send the header.
 
 ---
 

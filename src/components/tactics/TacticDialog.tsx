@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -14,9 +14,11 @@ import type { Tactic, TacticPriority } from '@/lib/types'
 
 // Rich row type with denormalised joins — used across Tactics & Kanban
 export interface TacticRow extends Tactic {
-  project:  { id: string; name: string; code: string } | null
-  assignee: { id: string; full_name: string; employee_code: string } | null
-  creator:  { id: string; full_name: string; employee_code: string } | null
+  project:   { id: string; name: string; code: string } | null
+  assignee:  { id: string; full_name: string; employee_code: string } | null
+  creator:   { id: string; full_name: string; employee_code: string } | null
+  /** All people on this work order (includes primary assignee). */
+  assignees?: { id: string; full_name: string; employee_code: string }[]
 }
 
 export type EmployeeOption = { id: string; full_name: string; employee_code: string }
@@ -39,7 +41,6 @@ const schema = z.object({
   training_notes:  z.string().optional(),
   training_link:   z.string().trim().url('Enter a valid URL').optional().or(z.literal('')),
   project_id:      z.string().optional(),
-  assigned_to:     z.string().min(1, 'Select an employee'),
   priority:        z.enum(['low', 'medium', 'high', 'critical']),
   due_date:        z.string().optional(),
   estimated_hours: z.coerce.number().positive().max(9999).optional().or(z.literal('')),
@@ -58,6 +59,8 @@ export function TacticDialog({
 }: Props) {
   const toast  = useToast()
   const isEdit = !!tactic
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
+  const [assigneeError, setAssigneeError] = useState<string | null>(null)
 
   const {
     register,
@@ -72,6 +75,13 @@ export function TacticDialog({
 
   useEffect(() => {
     if (open) {
+      const existing =
+        tactic?.assignees?.map(a => a.id)
+        ?? (tactic?.assigned_to ? [tactic.assigned_to] : [])
+
+      setAssigneeIds(existing)
+      setAssigneeError(null)
+
       reset(
         tactic
           ? {
@@ -80,7 +90,6 @@ export function TacticDialog({
               training_notes:  tactic.training_notes   ?? '',
               training_link:   tactic.training_link    ?? '',
               project_id:      tactic.project_id      ?? '',
-              assigned_to:     tactic.assigned_to,
               priority:        tactic.priority,
               due_date:        tactic.due_date         ?? '',
               estimated_hours: tactic.estimated_hours  !== null && tactic.estimated_hours !== undefined
@@ -89,13 +98,27 @@ export function TacticDialog({
             }
           : {
               priority: 'medium', title: '', description: '', training_notes: '', training_link: '',
-              project_id: '', assigned_to: '', due_date: '', estimated_hours: '' as unknown as number,
+              project_id: '', due_date: '', estimated_hours: '' as unknown as number,
             },
       )
     }
   }, [open, tactic, reset])
 
+  function toggleAssignee(id: string) {
+    setAssigneeError(null)
+    setAssigneeIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+    )
+  }
+
   async function onSubmit(values: FormValues) {
+    if (assigneeIds.length === 0) {
+      setAssigneeError('Select at least one person')
+      return
+    }
+
+    const primary = assigneeIds[0]
+
     try {
       const payload = {
         title:           values.title,
@@ -103,7 +126,8 @@ export function TacticDialog({
         training_notes:  values.training_notes  || null,
         training_link:   values.training_link    || null,
         project_id:      values.project_id      || null,
-        assigned_to:     values.assigned_to,
+        assigned_to:     primary,
+        assignee_ids:    assigneeIds,
         priority:        values.priority,
         due_date:        values.due_date         || null,
         estimated_hours: values.estimated_hours && values.estimated_hours !== ('' as unknown as number)
@@ -115,15 +139,17 @@ export function TacticDialog({
         ? await updateTactic(tactic!.id, payload)
         : await createTactic(payload)
 
-      // Denormalise for optimistic UI
-      const emp  = employees.find(e => e.id === payload.assigned_to)
+      const selectedPeople = assigneeIds
+        .map(id => employees.find(e => e.id === id) ?? { id, full_name: '—', employee_code: '—' })
+      const emp  = selectedPeople[0]
       const proj = projects.find(p => p.id === payload.project_id)
 
       const row: TacticRow = {
         ...saved,
-        project:  proj ?? null,
-        assignee: emp  ?? { id: payload.assigned_to, full_name: '—', employee_code: '—' },
-        creator:  tactic?.creator ?? { id: currentUserId, full_name: '—', employee_code: '—' },
+        project:   proj ?? null,
+        assignee:  emp,
+        assignees: selectedPeople,
+        creator:   tactic?.creator ?? { id: currentUserId, full_name: '—', employee_code: '—' },
       }
 
       toast.success(isEdit ? 'Work order updated' : 'Work order created')
@@ -200,16 +226,53 @@ export function TacticDialog({
           ))}
         </Select>
 
-        <Select
-          label="Assigned to *"
-          placeholder="— Select employee —"
-          error={errors.assigned_to?.message}
-          {...register('assigned_to')}
-        >
-          {employees.map(e => (
-            <option key={e.id} value={e.id}>{e.full_name} ({e.employee_code})</option>
-          ))}
-        </Select>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-neutral-700">
+            Assign to * <span className="font-normal text-neutral-500">(select one or more)</span>
+          </label>
+          <div className="max-h-48 overflow-y-auto rounded-md border border-neutral-300 bg-white p-2">
+            {employees.length === 0 ? (
+              <p className="px-1 py-2 text-sm text-neutral-400">No employees available</p>
+            ) : (
+              <ul className="space-y-1">
+                {employees.map(e => {
+                  const checked = assigneeIds.includes(e.id)
+                  const isPrimary = checked && assigneeIds[0] === e.id
+                  return (
+                    <li key={e.id}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-neutral-50">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                          checked={checked}
+                          onChange={() => toggleAssignee(e.id)}
+                        />
+                        <span className="flex-1 text-sm text-neutral-800">
+                          {e.full_name}{' '}
+                          <span className="text-neutral-400">({e.employee_code})</span>
+                        </span>
+                        {isPrimary && (
+                          <span className="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary-700">
+                            Primary
+                          </span>
+                        )}
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+          {assigneeIds.length > 0 && (
+            <p className="text-xs text-neutral-500">
+              {assigneeIds.length} selected. First checked person is primary for reports; everyone
+              shares the same work order.
+            </p>
+          )}
+          {assigneeError && (
+            <p className="text-xs text-danger-600">{assigneeError}</p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Select
@@ -251,4 +314,17 @@ export function TacticDialog({
       </form>
     </Dialog>
   )
+}
+
+/** Display helper for list/detail cells */
+export function formatAssignees(t: TacticRow): string {
+  const list = t.assignees?.length
+    ? t.assignees
+    : t.assignee
+      ? [t.assignee]
+      : []
+  if (list.length === 0) return 'Unknown'
+  if (list.length === 1) return list[0].full_name
+  if (list.length === 2) return `${list[0].full_name}, ${list[1].full_name}`
+  return `${list[0].full_name} +${list.length - 1}`
 }

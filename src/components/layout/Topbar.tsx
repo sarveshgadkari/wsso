@@ -25,6 +25,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/announcements',      'Announcements'],
   ['/notifications',      'Notifications'],
   ['/settings/hierarchy', 'Admin Settings'],
+  ['/connect-ai',         'Connect AI'],
 ]
 
 const ROLE_CHIP: Record<string, string> = {

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { TacticDialog, type TacticRow, type EmployeeOption, type ProjectOption } from './TacticDialog'
+import { TacticDialog, formatAssignees, type TacticRow, type EmployeeOption, type ProjectOption } from './TacticDialog'
 import {
   STATUS_LABEL, STATUS_VARIANT,
   PRIORITY_LABEL, PRIORITY_VARIANT,
@@ -49,11 +49,12 @@ export function TacticsList({
 
   const filtered = useMemo(() => {
     return tactics.filter(t => {
-      if (myTasks    && t.assigned_to !== currentUserId) return false
+      const assigneeIds = t.assignees?.map(a => a.id) ?? [t.assigned_to]
+      if (myTasks    && !assigneeIds.includes(currentUserId)) return false
       if (statusF    && t.status      !== statusF)       return false
       if (priorityF  && t.priority    !== priorityF)     return false
       if (projectF   && t.project_id  !== projectF)      return false
-      if (assigneeF  && t.assigned_to !== assigneeF)     return false
+      if (assigneeF  && !assigneeIds.includes(assigneeF)) return false
       if (search) {
         const q = search.toLowerCase()
         return t.title.toLowerCase().includes(q) || t.code.toLowerCase().includes(q)
@@ -166,8 +167,8 @@ export function TacticsList({
                           {PRIORITY_LABEL[t.priority as TacticPriority]}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm text-neutral-700">
-                        {t.assignee?.full_name ?? 'Unknown'}
+                      <td className="px-4 py-3 text-sm text-neutral-700" title={formatAssignees(t)}>
+                        {formatAssignees(t)}
                       </td>
                       <td className="px-4 py-3 text-sm text-neutral-500">
                         {t.project?.name ?? <span className="text-neutral-300">—</span>}

@@ -36,24 +36,56 @@ export function resolveProfile(
   return map[id] ?? fallback ?? UNKNOWN_PROFILE(id)
 }
 
-/** Fill assignee/creator on tactic rows — profile embeds fail under RLS for employees. */
+/** Fill assignee/creator/assignees on tactic rows — profile embeds fail under RLS for employees. */
 export async function enrichTacticRows<T extends {
+  id:          string
   assigned_to: string
   created_by:  string
   assignee?:   ProfileBrief | null
   creator?:    ProfileBrief | null
-}>(rows: T[]): Promise<(T & { assignee: ProfileBrief; creator: ProfileBrief })[]> {
+  assignees?:  ProfileBrief[] | null
+}>(rows: T[]): Promise<(T & {
+  assignee:  ProfileBrief
+  creator:   ProfileBrief
+  assignees: ProfileBrief[]
+})[]> {
   if (rows.length === 0) return []
 
-  const map = await loadProfilesByIds(
-    rows.flatMap(r => [r.assigned_to, r.created_by]),
-  )
+  const tacticIds = rows.map(r => r.id)
+  const { data: links } = await supabaseAdmin
+    .from('tactic_assignees')
+    .select('tactic_id, profile_id')
+    .in('tactic_id', tacticIds)
 
-  return rows.map(row => ({
-    ...row,
-    assignee: resolveProfile(row.assigned_to, map, row.assignee),
-    creator:  resolveProfile(row.created_by,  map, row.creator),
-  }))
+  const linkRows = (links ?? []) as { tactic_id: string; profile_id: string }[]
+  const byTactic = new Map<string, string[]>()
+  for (const link of linkRows) {
+    const list = byTactic.get(link.tactic_id) ?? []
+    list.push(link.profile_id)
+    byTactic.set(link.tactic_id, list)
+  }
+
+  const map = await loadProfilesByIds([
+    ...rows.flatMap(r => [r.assigned_to, r.created_by]),
+    ...linkRows.map(l => l.profile_id),
+  ])
+
+  return rows.map(row => {
+    const ids = byTactic.get(row.id)
+    const assigneeIds =
+      ids && ids.length > 0
+        ? Array.from(new Set([row.assigned_to, ...ids]))
+        : [row.assigned_to]
+
+    const assignees = assigneeIds.map(id => resolveProfile(id, map))
+
+    return {
+      ...row,
+      assignee:  resolveProfile(row.assigned_to, map, row.assignee),
+      creator:   resolveProfile(row.created_by,  map, row.creator),
+      assignees,
+    }
+  })
 }
 
 /** Fill actor on activity log rows. */

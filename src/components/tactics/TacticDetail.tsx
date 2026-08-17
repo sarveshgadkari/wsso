@@ -170,7 +170,10 @@ export function TacticDetail({
           currentStatus={status}
           role={role}
           isCreator={tactic.created_by === currentUserId}
-          isAssignee={tactic.assigned_to === currentUserId}
+          isAssignee={
+            tactic.assigned_to === currentUserId
+            || (tactic.assignees?.some(a => a.id === currentUserId) ?? false)
+          }
           pendingWorkNote={pendingWorkNote}
           onWorkNoteConsumed={() => setPendingWorkNote('')}
           onTransitioned={newStatus => {
@@ -188,12 +191,23 @@ export function TacticDetail({
         <h3 className="mb-4 text-sm font-semibold text-neutral-800">Details</h3>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <MetaItem icon={User} label="Assigned to">
-            {tactic.assignee?.full_name ?? 'Unknown'}
-            {tactic.assignee?.employee_code && (
-              <span className="ml-1.5 font-mono text-xs text-neutral-400">
-                ({tactic.assignee.employee_code})
+            {(tactic.assignees?.length
+              ? tactic.assignees
+              : tactic.assignee
+                ? [tactic.assignee]
+                : []
+            ).map((a, i, arr) => (
+              <span key={a.id}>
+                {a.full_name}
+                {a.employee_code ? (
+                  <span className="ml-1.5 font-mono text-xs text-neutral-400">
+                    ({a.employee_code})
+                  </span>
+                ) : null}
+                {i < arr.length - 1 ? ', ' : ''}
               </span>
-            )}
+            ))}
+            {!tactic.assignees?.length && !tactic.assignee && 'Unknown'}
           </MetaItem>
 
           <MetaItem icon={Briefcase} label="Project">

@@ -103,6 +103,8 @@ export function registerTacticTools(server: McpServer) {
         training_link: z.string().url().optional().nullable().or(z.literal('')),
         project_id: UuidSchema.optional().nullable(),
         assigned_to: UuidSchema,
+        /** Optional extra people on the same work order (includes or excludes assigned_to). */
+        assignee_ids: z.array(UuidSchema).optional(),
         priority: TacticPrioritySchema,
         due_date: DateSchema.optional().nullable(),
         estimated_hours: z.number().positive().max(9999).optional().nullable(),
@@ -134,15 +136,24 @@ export function registerTacticTools(server: McpServer) {
           .single()
         if (error) throw new Error(error.message)
 
+        const createAssigneeIds = Array.from(
+          new Set([args.assigned_to, ...(args.assignee_ids ?? [])]),
+        )
+        await supabaseAdmin.from('tactic_assignees').delete().eq('tactic_id', data.id)
+        await supabaseAdmin.from('tactic_assignees').insert(
+          createAssigneeIds.map(profile_id => ({ tactic_id: data.id, profile_id })),
+        )
+
         await supabaseAdmin.from('activity_logs').insert({
           tactic_id: data.id,
           employee_id: profile.id,
           action: 'Tactic created',
         })
 
-        if (args.assigned_to !== profile.id) {
+        for (const assigneeId of createAssigneeIds) {
+          if (assigneeId === profile.id) continue
           await insertNotification(
-            args.assigned_to,
+            assigneeId,
             'tactic_assigned',
             `You've been assigned a new task: "${args.title}"`,
             `/tactics/${data.id}`,
@@ -166,6 +177,8 @@ export function registerTacticTools(server: McpServer) {
         training_link: z.string().url().optional().nullable().or(z.literal('')),
         project_id: UuidSchema.optional().nullable(),
         assigned_to: UuidSchema,
+        /** Optional extra people on the same work order (includes or excludes assigned_to). */
+        assignee_ids: z.array(UuidSchema).optional(),
         priority: TacticPrioritySchema,
         due_date: DateSchema.optional().nullable(),
         estimated_hours: z.number().positive().max(9999).optional().nullable(),
@@ -195,6 +208,14 @@ export function registerTacticTools(server: McpServer) {
           .select()
           .single()
         if (error) throw new Error(error.message)
+
+        const updateAssigneeIds = Array.from(
+          new Set([args.assigned_to, ...(args.assignee_ids ?? [])]),
+        )
+        await supabaseAdmin.from('tactic_assignees').delete().eq('tactic_id', args.id)
+        await supabaseAdmin.from('tactic_assignees').insert(
+          updateAssigneeIds.map(profile_id => ({ tactic_id: args.id, profile_id })),
+        )
 
         await supabaseAdmin.from('activity_logs').insert({
           tactic_id: args.id,
@@ -230,10 +251,22 @@ export function registerTacticTools(server: McpServer) {
           .single()
         if (fetchErr || !tactic) throw new Error('Tactic not found or access denied')
 
+        const { data: assigneeLinks } = await supabaseAdmin
+          .from('tactic_assignees')
+          .select('profile_id')
+          .eq('tactic_id', args.id)
+
+        const assigneeIds = Array.from(
+          new Set([
+            tactic.assigned_to as string,
+            ...((assigneeLinks ?? []) as { profile_id: string }[]).map(a => a.profile_id),
+          ]),
+        )
+
         const currentStatus = tactic.status as TacticStatus
         const ctx = {
           isCreator: tactic.created_by === profile.id,
-          isAssignee: tactic.assigned_to === profile.id,
+          isAssignee: assigneeIds.includes(profile.id),
         }
         const allowed = getAllowedNext(currentStatus, profile.role, ctx)
         if (!allowed.includes(args.target_status)) {

@@ -21,6 +21,7 @@ import {
   CalendarOff,
   CalendarCheck,
   GraduationCap,
+  Bot,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -91,6 +92,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     items: [
+      { label: 'Connect AI',     href: '/connect-ai',         icon: Bot,      },
       { label: 'Notifications', href: '/notifications',      icon: Bell,     isNotifications: true },
       { label: 'Admin Settings',href: '/settings/hierarchy', icon: Settings, roles: ['admin'] },
     ],
@@ -118,6 +120,7 @@ export const DASHBOARD_PATHS = [
   '/crm',
   '/my-leads',
   '/leave',
+  '/connect-ai',
 ]
 
 /** Paths accessible only to admin/manager in the middleware */

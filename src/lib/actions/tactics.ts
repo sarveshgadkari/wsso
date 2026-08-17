@@ -15,13 +15,38 @@ const TacticInputSchema = z.object({
   training_notes:  z.string().optional().nullable(),
   training_link:   z.string().trim().url('Enter a valid URL').optional().nullable().or(z.literal('')),
   project_id:      z.string().uuid().optional().nullable(),
-  assigned_to:     z.string().uuid('Select an employee'),
+  /** Primary assignee (first selected). Kept for legacy columns / filters. */
+  assigned_to:     z.string().uuid('Select at least one employee'),
+  /** All people on this work order (must include assigned_to). */
+  assignee_ids:    z.array(z.string().uuid()).min(1, 'Select at least one employee'),
   priority:        z.enum(['low', 'medium', 'high', 'critical']),
   due_date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   estimated_hours: z.number().positive().max(9999).optional().nullable(),
+}).superRefine((val, ctx) => {
+  if (!val.assignee_ids.includes(val.assigned_to)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Primary assignee must be in the assignee list',
+      path: ['assignee_ids'],
+    })
+  }
 })
 
 export type TacticInput = z.infer<typeof TacticInputSchema>
+
+async function replaceTacticAssignees(tacticId: string, assigneeIds: string[]) {
+  const unique = Array.from(new Set(assigneeIds))
+  const { error: delErr } = await supabaseAdmin
+    .from('tactic_assignees')
+    .delete()
+    .eq('tactic_id', tacticId)
+  if (delErr) throw new Error(delErr.message)
+
+  const { error: insErr } = await supabaseAdmin
+    .from('tactic_assignees')
+    .insert(unique.map(profile_id => ({ tactic_id: tacticId, profile_id })))
+  if (insErr) throw new Error(insErr.message)
+}
 
 export async function createTactic(raw: TacticInput) {
   const profile = await requireProfile()
@@ -50,16 +75,18 @@ export async function createTactic(raw: TacticInput) {
 
   if (error) throw new Error(error.message)
 
+  await replaceTacticAssignees(data.id, input.assignee_ids)
+
   await supabaseAdmin.from('activity_logs').insert({
     tactic_id:   data.id,
     employee_id: profile.id,
     action:      'Tactic created',
   })
 
-  // Notify the assigned employee (skip self-assignment)
-  if (input.assigned_to !== profile.id) {
+  for (const assigneeId of Array.from(new Set(input.assignee_ids))) {
+    if (assigneeId === profile.id) continue
     await insertNotification(
-      input.assigned_to,
+      assigneeId,
       'tactic_assigned',
       `You've been assigned a new task: "${input.title}"`,
       `/tactics/${data.id}`,
@@ -97,6 +124,8 @@ export async function updateTactic(id: string, raw: TacticInput) {
 
   if (error) throw new Error(error.message)
 
+  await replaceTacticAssignees(id, input.assignee_ids)
+
   await supabaseAdmin.from('activity_logs').insert({
     tactic_id:   id,
     employee_id: profile.id,
@@ -126,10 +155,22 @@ export async function transitionStatus(
 
   if (fetchErr || !tactic) throw new Error('Tactic not found or access denied')
 
+  const { data: assigneeLinks } = await supabaseAdmin
+    .from('tactic_assignees')
+    .select('profile_id')
+    .eq('tactic_id', tacticId)
+
+  const assigneeIds = Array.from(
+    new Set([
+      tactic.assigned_to as string,
+      ...((assigneeLinks ?? []) as { profile_id: string }[]).map(a => a.profile_id),
+    ]),
+  )
+
   const currentStatus = tactic.status as TacticStatus
   const ctx = {
     isCreator:  tactic.created_by === profile.id,
-    isAssignee: tactic.assigned_to === profile.id,
+    isAssignee: assigneeIds.includes(profile.id),
   }
   const allowed = getAllowedNext(currentStatus, profile.role, ctx)
 
@@ -168,10 +209,11 @@ export async function transitionStatus(
     notes:       comment?.trim() || null,
   })
 
-  // Notify assigned employee about any status change (skip if they did it themselves)
-  if (tactic.assigned_to !== profile.id) {
+  // Notify other assignees about status change
+  for (const assigneeId of assigneeIds) {
+    if (assigneeId === profile.id) continue
     await insertNotification(
-      tactic.assigned_to,
+      assigneeId,
       'tactic_status',
       `"${tactic.title}" moved to ${STATUS_LABEL[targetStatus]}`,
       `/tactics/${tacticId}`,
@@ -237,8 +279,18 @@ export async function submitWorkUpdate(tacticId: string, notes: string) {
 
   if (!tactic) throw new Error('Work order not found or access denied')
 
-  if (profile.role === 'employee' && tactic.assigned_to !== profile.id) {
-    throw new Error('You can only update work orders assigned to you')
+  if (profile.role === 'employee') {
+    const { data: link } = await supabaseAdmin
+      .from('tactic_assignees')
+      .select('profile_id')
+      .eq('tactic_id', tacticId)
+      .eq('profile_id', profile.id)
+      .maybeSingle()
+
+    const isAssignee = tactic.assigned_to === profile.id || !!link
+    if (!isAssignee) {
+      throw new Error('You can only update work orders assigned to you')
+    }
   }
 
   if (['done', 'archived'].includes(tactic.status)) {

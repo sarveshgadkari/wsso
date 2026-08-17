@@ -12,6 +12,7 @@ WSSO includes an employee-scoped MCP server so AI tools (Cursor, Claude, custom 
 | MCP endpoint | `https://wsso.vercel.app/api/mcp/mcp` |
 | Auth | `Authorization: Bearer <supabase_access_token>` |
 | Deploy & share guide | [docs/MCP.md](docs/MCP.md) |
+| **Workforce 2.0 partner guide** | [docs/WSSO-MCP-Workforce2-Integration-Guide.md](docs/WSSO-MCP-Workforce2-Integration-Guide.md) |
 | Cursor example config | [.cursor/mcp.json.example](.cursor/mcp.json.example) |
 
 ### Quick verify

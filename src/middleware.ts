@@ -17,6 +17,8 @@ const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/leave/team', '/pro
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true
+  // Connect AI helper requires a logged-in browser session (not Bearer MCP)
+  if (pathname.startsWith('/api/mcp/connection')) return false
   if (pathname === '/api/mcp') return true
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
 }

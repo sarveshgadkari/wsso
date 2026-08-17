@@ -260,6 +260,38 @@ export type Database = {
         ]
       }
 
+      tactic_assignees: {
+        Row: {
+          tactic_id:  string
+          profile_id: string
+          created_at: string
+        }
+        Insert: {
+          tactic_id:   string
+          profile_id:  string
+          created_at?: string
+        }
+        Update: {
+          tactic_id?:  string
+          profile_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tactic_assignees_tactic_id_fkey'
+            columns: ['tactic_id']
+            referencedRelation: 'tactics'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tactic_assignees_profile_id_fkey'
+            columns: ['profile_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       tactics: {
         Row: {
           id: string

@@ -93,7 +93,11 @@ function KanbanCard({
       {/* Assignee */}
       <div className="flex items-center gap-1.5 text-xs text-neutral-500">
         <User className="h-3 w-3 shrink-0" />
-        <span className="truncate">{tactic.assignee?.full_name ?? 'Unknown'}</span>
+        <span className="truncate">
+          {tactic.assignees && tactic.assignees.length > 1
+            ? `${tactic.assignees[0]?.full_name ?? 'Unknown'} +${tactic.assignees.length - 1}`
+            : (tactic.assignee?.full_name ?? 'Unknown')}
+        </span>
       </div>
 
       {/* Project + due date */}
@@ -248,7 +252,8 @@ export function KanbanBoard({ initialTactics, role, currentUserId }: Props) {
 
     const ctx = {
       isCreator:  tactic.created_by === currentUserId,
-      isAssignee: tactic.assigned_to === currentUserId,
+      isAssignee: tactic.assigned_to === currentUserId
+        || (tactic.assignees?.some(a => a.id === currentUserId) ?? false),
     }
     const allowed = getAllowedNext(currentStatus, role, ctx)
     if (!allowed.includes(targetStatus)) {
