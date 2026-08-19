@@ -1000,7 +1000,15 @@ export type Database = {
           created_at?:   string
         }
         Update: {
-          status?: Database['public']['Enums']['lead_status']
+          first_name?:   string
+          last_name?:    string
+          email?:        string
+          company?:      string | null
+          inquiry_type?: string | null
+          message?:      string
+          source?:       string | null
+          page_path?:    string | null
+          status?:       Database['public']['Enums']['lead_status']
         }
         Relationships: []
       }

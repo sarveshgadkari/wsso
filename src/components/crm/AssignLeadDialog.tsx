@@ -9,6 +9,7 @@ import { getAssignableUsers, assignLead, unassignLead } from '@/lib/actions/lead
 import type { LeadRow } from './LeadsTable'
 
 type AssignableUser = { id: string; full_name: string; employee_code: string; role: string }
+type Assignment = LeadRow['assignments'][number]
 
 interface Props {
   lead: LeadRow
@@ -19,6 +20,7 @@ interface Props {
 export function AssignLeadDialog({ lead, open, onClose }: Props) {
   const router = useRouter()
   const [users, setUsers]     = useState<AssignableUser[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>(lead.assignments)
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded]   = useState(false)
   const [selected, setSelected] = useState('')
@@ -35,16 +37,36 @@ export function AssignLeadDialog({ lead, open, onClose }: Props) {
   }
 
   useEffect(() => {
-    if (open) { setSelected(''); setError(''); loadUsers() }
+    if (open) {
+      setSelected('')
+      setError('')
+      setAssignments(lead.assignments)
+      loadUsers()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lead.id])
 
   function handleAssign() {
     if (!selected) { setError('Select someone to assign'); return }
+    const person = users.find(u => u.id === selected)
+    if (!person) { setError('Select someone to assign'); return }
     setError('')
     start(async () => {
       try {
-        await assignLead(lead.id, selected)
+        const row = await assignLead(lead.id, selected)
+        setAssignments(prev => [
+          ...prev,
+          {
+            id: row.id,
+            created_at: row.created_at,
+            employee: {
+              id: person.id,
+              full_name: person.full_name,
+              employee_code: person.employee_code,
+              role: person.role,
+            },
+          },
+        ])
         setSelected('')
         loadUsers()
         router.refresh()
@@ -58,9 +80,11 @@ export function AssignLeadDialog({ lead, open, onClose }: Props) {
     start(async () => {
       try {
         await unassignLead(assignmentId)
+        setAssignments(prev => prev.filter(a => a.id !== assignmentId))
         loadUsers()
         router.refresh()
-      } catch {
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to remove')
         router.refresh()
       }
     })
@@ -79,11 +103,11 @@ export function AssignLeadDialog({ lead, open, onClose }: Props) {
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Currently assigned
           </h3>
-          {lead.assignments.length === 0 ? (
+          {assignments.length === 0 ? (
             <p className="text-sm text-neutral-400">Not assigned to anyone yet.</p>
           ) : (
             <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-100">
-              {lead.assignments.map(a => (
+              {assignments.map(a => (
                 <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-neutral-800">{a.employee.full_name}</p>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { UserPlus } from 'lucide-react'
+import { Pencil, UserPlus } from 'lucide-react'
 import { DataTable, type TableColumn } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -11,6 +11,7 @@ import { LEAD_STATUS_LABEL } from '@/lib/leads-utils'
 import { LEAD_STATUSES } from '@/lib/types'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { AssignLeadDialog } from './AssignLeadDialog'
+import { EditLeadDialog } from './EditLeadDialog'
 
 export interface LeadRow extends Lead {
   assignments: {
@@ -27,6 +28,7 @@ interface Props {
 export function LeadsTable({ initialLeads }: Props) {
   const router = useRouter()
   const [assignTarget, setAssignTarget] = useState<LeadRow | null>(null)
+  const [editTarget, setEditTarget] = useState<LeadRow | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isPending, start] = useTransition()
 
@@ -131,10 +133,16 @@ export function LeadsTable({ initialLeads }: Props) {
       header: '',
       enableSorting: false,
       cell: ({ row: { original: l } }) => (
-        <Button variant="ghost" size="sm" onClick={() => setAssignTarget(l)}>
-          <UserPlus className="h-3.5 w-3.5" />
-          Assign
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setEditTarget(l)}>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setAssignTarget(l)}>
+            <UserPlus className="h-3.5 w-3.5" />
+            Assign
+          </Button>
+        </div>
       ),
     },
   ]
@@ -161,6 +169,15 @@ export function LeadsTable({ initialLeads }: Props) {
         emptyMessage="No leads yet."
         toolbar={toolbar}
       />
+
+      {editTarget && (
+        <EditLeadDialog
+          lead={editTarget}
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
       {assignTarget && (
         <AssignLeadDialog
