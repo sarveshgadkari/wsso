@@ -124,6 +124,7 @@ export function TacticDocumentForm({
   const router    = useRouter()
   const isEdit    = !!initialDoc
   const isRevision = initialDoc?.status === 'revision_needed'
+  const isReapproval = !!initialDoc && ['approved', 'reviewed', 'submitted'].includes(initialDoc.status)
 
   // Static fields
   const [dateOfMeeting, setDateOfMeeting] = useState(initialDoc?.date_of_meeting ?? '')
@@ -653,7 +654,11 @@ export function TacticDocumentForm({
           onClick={() => handleSubmit(true)}
           loading={isPending}
         >
-          {isRevision ? 'Save & Re-submit' : 'Submit for Review'}
+          {isRevision
+            ? 'Save & Re-submit'
+            : isReapproval
+              ? 'Save & Submit for Re-approval'
+              : 'Submit for Review'}
         </Button>
       </div>
     </div>

@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import type { Database, Profile } from '@/lib/types'
+import {
+  isMcpLongLivedToken,
+  resolveMcpLongLivedToken,
+} from '@/lib/mcp/long-lived-token'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export type McpAuthExtra = {
   profile: Profile
@@ -28,14 +33,40 @@ export function createMcpUserClient(accessToken: string) {
 }
 
 /**
- * Validates a Supabase access token and returns MCP AuthInfo with the profile.
- * Used by withMcpAuth — never elevates to service role for data access.
+ * Validates Bearer token for MCP:
+ * 1) Long-lived `wsso_mcp_…` Connect AI token (30 days), or
+ * 2) Normal Supabase access JWT (short-lived session).
  */
 export async function verifyMcpToken(
   _req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> {
   if (!bearerToken) return undefined
+
+  if (isMcpLongLivedToken(bearerToken)) {
+    try {
+      const resolved = await resolveMcpLongLivedToken(bearerToken)
+      if (!resolved) return undefined
+
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('id', resolved.userId)
+        .single()
+
+      if (profileError || !profile) return undefined
+      if (profile.status === 'inactive') return undefined
+
+      return {
+        token: resolved.supabaseJwt,
+        clientId: profile.id,
+        scopes: [`role:${profile.role}`, 'mcp:long_lived'],
+        extra: { profile } satisfies McpAuthExtra,
+      }
+    } catch {
+      return undefined
+    }
+  }
 
   const supabase = createMcpUserClient(bearerToken)
   const {

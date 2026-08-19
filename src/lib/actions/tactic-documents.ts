@@ -113,13 +113,18 @@ async function notifyReviewer(
   creator: Profile,
   docId: string,
   docCode: string,
+  isReapproval = false,
 ) {
+  const verb = isReapproval
+    ? 'edited a TACTIC and it needs re-approval'
+    : 'submitted a TACTIC for your review'
+
   if (creator.role === 'employee') {
     if (!creator.manager_id) return
     await supabaseAdmin.from('notifications').insert({
       user_id: creator.manager_id,
       type:    'tactic_review_requested',
-      message: `${creator.full_name} submitted a TACTIC for your review: ${docCode}`,
+      message: `${creator.full_name} ${verb}: ${docCode}`,
       link:    `/tactic-documents/${docId}`,
     })
   } else if (creator.role === 'manager') {
@@ -133,7 +138,7 @@ async function notifyReviewer(
       admins.map((a: { id: string }) => ({
         user_id: a.id,
         type:    'tactic_review_requested',
-        message: `${creator.full_name} submitted a TACTIC for your review: ${docCode}`,
+        message: `${creator.full_name} ${verb}: ${docCode}`,
         link:    `/tactic-documents/${docId}`,
       })),
     )
@@ -213,7 +218,7 @@ export async function updateTacticDocument(
   const profile  = await requireProfile()
   const supabase = await createClient()
 
-  // Verify the caller owns this document
+  // Verify the caller owns this document (or is admin)
   const { data: existing } = await supabase
     .from('tactic_documents')
     .select('id, code, status, created_by')
@@ -223,15 +228,24 @@ export async function updateTacticDocument(
   if (!existing) throw new Error('Document not found')
   if (existing.created_by !== profile.id && profile.role !== 'admin')
     throw new Error('Not authorized')
-  if (!['draft', 'revision_needed'].includes(existing.status))
+
+  const editableStatuses = ['draft', 'revision_needed', 'submitted', 'reviewed', 'approved']
+  if (!editableStatuses.includes(existing.status))
     throw new Error('Document cannot be edited in its current status')
 
-  const now    = new Date().toISOString()
-  const status = resubmit
-    ? (profile.role === 'admin' ? 'approved' : 'submitted')
-    : 'draft'
+  const wasApprovedOrInReview = ['approved', 'reviewed', 'submitted'].includes(existing.status)
+  const now = new Date().toISOString()
 
-  const { error } = await supabase
+  // After editing an approved/in-review TACTIC, re-submit for approval
+  // (admin editors keep auto-approve on submit).
+  let status: 'draft' | 'submitted' | 'approved'
+  if (resubmit) {
+    status = profile.role === 'admin' ? 'approved' : 'submitted'
+  } else {
+    status = 'draft'
+  }
+
+  const { error } = await supabaseAdmin
     .from('tactic_documents')
     .update({
       purpose:         input.purpose,
@@ -247,32 +261,37 @@ export async function updateTacticDocument(
       tactic_id:       nullIfEmpty(input.tactic_id),
       status,
       review_note:     null,
-      submitted_at:    status === 'submitted' ? now : null,
-      reviewed_at:     null,
-      reviewer_id:     null,
+      submitted_at:    status === 'submitted' || status === 'approved' ? now : null,
+      reviewed_at:     status === 'approved' ? now : null,
+      reviewer_id:     status === 'approved' ? profile.id : null,
     })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
 
-  // Replace tasks and next steps
-  await supabase.from('tactic_tasks').delete().eq('tactic_document_id', id)
-  await supabase.from('tactic_next_steps').delete().eq('tactic_document_id', id)
+  // Replace tasks and next steps (admin client — RLS may block deletes after status change)
+  await supabaseAdmin.from('tactic_tasks').delete().eq('tactic_document_id', id)
+  await supabaseAdmin.from('tactic_next_steps').delete().eq('tactic_document_id', id)
   await insertTasksAndSteps(id, input.tasks, input.next_steps)
 
-  const action = resubmit ? 'tactic_doc.resubmitted' : 'tactic_doc.updated'
-  await supabase.from('activity_logs').insert({
+  const action = resubmit
+    ? (wasApprovedOrInReview ? 'tactic_doc.resubmitted_for_reapproval' : 'tactic_doc.resubmitted')
+    : 'tactic_doc.updated'
+
+  await supabaseAdmin.from('activity_logs').insert({
     employee_id: profile.id,
     action,
     meta: {
       entity_type: 'tactic_document',
       entity_id:   id,
       entity_code: existing.code,
+      previous_status: existing.status,
+      new_status: status,
     },
   })
 
   if (status === 'submitted') {
-    await notifyReviewer(profile, id, existing.code)
+    await notifyReviewer(profile, id, existing.code, wasApprovedOrInReview)
   }
 
   revalidatePath('/tactic-documents')

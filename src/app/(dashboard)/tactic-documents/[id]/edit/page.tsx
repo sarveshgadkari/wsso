@@ -26,7 +26,7 @@ export default async function EditTacticDocumentPage({ params }: Props) {
 
   const canEdit =
     (doc.created_by === profile.id || profile.role === 'admin') &&
-    ['draft', 'revision_needed'].includes(doc.status as string)
+    ['draft', 'revision_needed', 'submitted', 'reviewed', 'approved'].includes(doc.status as string)
 
   if (!canEdit) redirect(`/tactic-documents/${params.id}`)
 
@@ -108,6 +108,12 @@ export default async function EditTacticDocumentPage({ params }: Props) {
         {doc.status === 'revision_needed' && (
           <p className="mt-1 text-sm text-warning-700">
             This document has been sent back for revision. Make your changes and re-submit.
+          </p>
+        )}
+        {['approved', 'reviewed', 'submitted'].includes(doc.status as string) && (
+          <p className="mt-1 text-sm text-amber-700">
+            Editing this TACTIC will require re-approval after you submit. Previous approval is
+            cleared when you save &amp; submit.
           </p>
         )}
       </div>

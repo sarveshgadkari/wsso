@@ -204,7 +204,19 @@ export function TacticDocumentDetail({
                 Edit &amp; Re-submit
               </Button>
             )}
-            {isAdmin && ['draft', 'revision_needed'].includes(doc.status) && (
+            {/* Owner or admin can edit approved / submitted / reviewed — then needs re-approval */}
+            {(isOwner || isAdmin) &&
+              ['approved', 'reviewed', 'submitted'].includes(doc.status) && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => router.push(`/tactic-documents/${doc.id}/edit`)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            )}
+            {isAdmin && ['draft', 'revision_needed'].includes(doc.status) && !isOwner && (
               <Button
                 size="sm"
                 variant="secondary"

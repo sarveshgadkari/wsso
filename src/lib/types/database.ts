@@ -292,6 +292,53 @@ export type Database = {
         ]
       }
 
+      mcp_connection_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          token_hash: string
+          token_encrypted: string
+          token_prefix: string
+          label: string
+          expires_at: string
+          revoked_at: string | null
+          last_used_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          token_hash: string
+          token_encrypted: string
+          token_prefix: string
+          label?: string
+          expires_at: string
+          revoked_at?: string | null
+          last_used_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          token_hash?: string
+          token_encrypted?: string
+          token_prefix?: string
+          label?: string
+          expires_at?: string
+          revoked_at?: string | null
+          last_used_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'mcp_connection_tokens_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       tactics: {
         Row: {
           id: string
