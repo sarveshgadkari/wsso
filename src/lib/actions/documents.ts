@@ -238,6 +238,12 @@ export async function addDocumentLink(input: {
 
 // ── List ───────────────────────────────────────────────────────────────────────
 
+/**
+ * Visibility matches documents RLS (not org-wide):
+ * - admin / director: all
+ * - manager: uploads by people on their team
+ * - employee: own uploads OR docs tagged with their employee_code
+ */
 export async function getDocuments(filters: {
   search?:       string
   tactic_code?:  string
@@ -245,37 +251,16 @@ export async function getDocuments(filters: {
   client_code?:  string
   entity_type?:  string
 }): Promise<DocumentMeta[]> {
-  const profile  = await requireProfile()
+  await requireProfile()
   const supabase = await createClient()
 
-  let orFilter: string | null = null
-
-  if (profile.role !== 'admin' && profile.role !== 'director') {
-    const orParts: string[] = [`uploaded_by.eq.${profile.id}`]
-
-    const { data: tactics } = await supabase
-      .from('tactics').select('code').neq('status', 'archived')
-    const tacticCodes = (tactics ?? []).map((t: { code: string }) => t.code)
-    if (tacticCodes.length > 0) orParts.push(`tactic_code.in.(${tacticCodes.join(',')})`)
-
-    const { data: projects } = await supabase.from('projects').select('code')
-    const projectCodes = (projects ?? []).map((p: { code: string }) => p.code)
-    if (projectCodes.length > 0) orParts.push(`project_code.in.(${projectCodes.join(',')})`)
-
-    const { data: clients } = await supabase.from('clients').select('code')
-    const clientCodes = (clients ?? []).map((c: { code: string }) => c.code)
-    if (clientCodes.length > 0) orParts.push(`client_code.in.(${clientCodes.join(',')})`)
-
-    orFilter = orParts.join(',')
-  }
-
-  let q = supabaseAdmin
+  // User-scoped client so docs_* RLS applies (never list via service role).
+  let q = supabase
     .from('documents')
     .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(300)
 
-  if (orFilter) q = q.or(orFilter)
   if (filters.tactic_code)  q = q.eq('tactic_code',  filters.tactic_code)
   if (filters.project_code) q = q.eq('project_code', filters.project_code)
   if (filters.client_code)  q = q.eq('client_code',  filters.client_code)
@@ -288,6 +273,26 @@ export async function getDocuments(filters: {
 
   let results = (data ?? []) as DocumentMeta[]
 
+  // Fill missing uploader names (profile embed can be null under RLS)
+  const missingUploaderIds = results
+    .filter(d => !d.uploader?.full_name && d.uploaded_by)
+    .map(d => d.uploaded_by)
+  if (missingUploaderIds.length > 0) {
+    const { data: profiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', Array.from(new Set(missingUploaderIds)))
+    const map = Object.fromEntries(
+      ((profiles ?? []) as { id: string; full_name: string }[]).map(p => [p.id, p]),
+    )
+    results = results.map(d => ({
+      ...d,
+      uploader: d.uploader?.full_name
+        ? d.uploader
+        : (map[d.uploaded_by] ? { full_name: map[d.uploaded_by].full_name } : d.uploader),
+    }))
+  }
+
   if (filters.search) {
     const s = filters.search.toLowerCase()
     results = results.filter(d =>
@@ -298,25 +303,32 @@ export async function getDocuments(filters: {
       d.client_code?.toLowerCase().includes(s) ||
       d.company_code?.toLowerCase().includes(s) ||
       d.employee_code?.toLowerCase().includes(s) ||
-      (d.uploader as { full_name: string } | null)?.full_name?.toLowerCase().includes(s)
+      d.uploader?.full_name?.toLowerCase().includes(s),
     )
   }
 
   return results
 }
 
+/** Confirm the current user can see this document under RLS before signing URLs. */
+async function requireAccessibleDocument(id: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('documents')
+    .select('id, source_type, file_path, external_url, uploaded_by')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Document not found or access denied')
+  return data
+}
+
 // ── Open (file download URL or external link) ─────────────────────────────────
 
 export async function getDocumentOpenUrl(id: string): Promise<string> {
   await requireProfile()
-
-  const { data: doc, error } = await supabaseAdmin
-    .from('documents')
-    .select('source_type, file_path, external_url')
-    .eq('id', id)
-    .single()
-
-  if (error || !doc) throw new Error('Document not found')
+  const doc = await requireAccessibleDocument(id)
 
   if (doc.source_type === 'link') {
     if (!doc.external_url) throw new Error('Link is missing')
@@ -336,6 +348,17 @@ export async function getDocumentOpenUrl(id: string): Promise<string> {
 /** @deprecated Use getDocumentOpenUrl */
 export async function getDownloadUrl(filePath: string): Promise<string> {
   await requireProfile()
+  const supabase = await createClient()
+
+  // Must be able to see a document row with this path (RLS)
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('file_path', filePath)
+    .maybeSingle()
+
+  if (!doc) throw new Error('Document not found or access denied')
+
   const { data, error } = await supabaseAdmin.storage
     .from(BUCKET)
     .createSignedUrl(filePath, 3600)
@@ -348,13 +371,8 @@ export async function getDownloadUrl(filePath: string): Promise<string> {
 export async function deleteDocument(id: string) {
   const profile = await requireProfile()
 
-  const { data: doc } = await supabaseAdmin
-    .from('documents')
-    .select('id, file_path, source_type, uploaded_by')
-    .eq('id', id)
-    .single()
-
-  if (!doc) throw new Error('Document not found')
+  // RLS must allow SELECT; then enforce delete rules in app
+  const doc = await requireAccessibleDocument(id)
 
   if (profile.role !== 'admin' && doc.uploaded_by !== profile.id) {
     throw new Error('You can only delete your own files')

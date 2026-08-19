@@ -27,7 +27,14 @@ export function CompaniesTable({ initialCompanies }: CompaniesTableProps) {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleSave = async (values: { name: string }) => {
+  const handleSave = async (values: {
+    name: string
+    ein_number: string | null
+    physical_address: string | null
+    mailing_address: string | null
+    phone: string | null
+    email: string | null
+  }) => {
     if (editing) {
       const res = await updateCompany(editing.id, values)
       if (res.error) return res.error
@@ -78,6 +85,33 @@ export function CompaniesTable({ initialCompanies }: CompaniesTableProps) {
         <span className="flex items-center gap-2 font-medium text-neutral-900">
           <Building2 className="h-3.5 w-3.5 text-neutral-400" />
           {getValue<string>()}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'ein_number',
+      header: 'EIN',
+      cell: ({ getValue }) => (
+        <span className="font-mono text-xs text-neutral-600">
+          {getValue<string | null>() || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'phone',
+      header: 'Phone',
+      cell: ({ getValue }) => (
+        <span className="text-sm text-neutral-600">
+          {getValue<string | null>() || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'email',
+      header: 'Email',
+      cell: ({ getValue }) => (
+        <span className="text-sm text-neutral-600">
+          {getValue<string | null>() || '—'}
         </span>
       ),
     },

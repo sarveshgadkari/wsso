@@ -5,22 +5,59 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
 
+const emptyToNull = (v: unknown) => {
+  if (v === undefined || v === null) return null
+  if (typeof v !== 'string') return v
+  const t = v.trim()
+  return t === '' ? null : t
+}
+
 const companySchema = z.object({
-  name: z.string().min(1, 'Company name is required').max(120),
+  name:              z.string().min(1, 'Company name is required').max(120),
+  ein_number:        z.preprocess(emptyToNull, z.string().max(32).nullable()),
+  physical_address:  z.preprocess(emptyToNull, z.string().max(500).nullable()),
+  mailing_address:   z.preprocess(emptyToNull, z.string().max(500).nullable()),
+  phone:             z.preprocess(emptyToNull, z.string().max(40).nullable()),
+  email:             z.preprocess(
+    emptyToNull,
+    z.string().email('Enter a valid email').max(200).nullable(),
+  ),
 })
 
-export async function createCompany(input: { name: string }) {
+export type CompanyInput = z.infer<typeof companySchema>
+
+function firstError(parsed: z.SafeParseError<CompanyInput>) {
+  const flat = parsed.error.flatten().fieldErrors
+  return (
+    flat.name?.[0] ??
+    flat.ein_number?.[0] ??
+    flat.physical_address?.[0] ??
+    flat.mailing_address?.[0] ??
+    flat.phone?.[0] ??
+    flat.email?.[0] ??
+    'Invalid input'
+  )
+}
+
+export async function createCompany(input: CompanyInput) {
   await requireRole(['admin'])
   const supabase = await createClient()
 
   const parsed = companySchema.safeParse(input)
   if (!parsed.success) {
-    return { error: parsed.error.flatten().fieldErrors.name?.[0] ?? 'Invalid input' }
+    return { error: firstError(parsed) }
   }
 
   const { data, error } = await supabase
     .from('companies')
-    .insert({ name: parsed.data.name })
+    .insert({
+      name:             parsed.data.name,
+      ein_number:       parsed.data.ein_number,
+      physical_address: parsed.data.physical_address,
+      mailing_address:  parsed.data.mailing_address,
+      phone:            parsed.data.phone,
+      email:            parsed.data.email,
+    })
     .select()
     .single()
 
@@ -31,18 +68,25 @@ export async function createCompany(input: { name: string }) {
   return { data }
 }
 
-export async function updateCompany(id: string, input: { name: string }) {
+export async function updateCompany(id: string, input: CompanyInput) {
   await requireRole(['admin'])
   const supabase = await createClient()
 
   const parsed = companySchema.safeParse(input)
   if (!parsed.success) {
-    return { error: parsed.error.flatten().fieldErrors.name?.[0] ?? 'Invalid input' }
+    return { error: firstError(parsed) }
   }
 
   const { data, error } = await supabase
     .from('companies')
-    .update({ name: parsed.data.name })
+    .update({
+      name:             parsed.data.name,
+      ein_number:       parsed.data.ein_number,
+      physical_address: parsed.data.physical_address,
+      mailing_address:  parsed.data.mailing_address,
+      phone:            parsed.data.phone,
+      email:            parsed.data.email,
+    })
     .eq('id', id)
     .select()
     .single()

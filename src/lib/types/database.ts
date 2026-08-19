@@ -80,18 +80,33 @@ export type Database = {
           id: string
           code: string
           name: string
+          ein_number: string | null
+          physical_address: string | null
+          mailing_address: string | null
+          phone: string | null
+          email: string | null
           created_at: string
         }
         Insert: {
           id?: string
           code?: string       // auto-generated (TLB001…)
           name: string
+          ein_number?: string | null
+          physical_address?: string | null
+          mailing_address?: string | null
+          phone?: string | null
+          email?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           code?: string
           name?: string
+          ein_number?: string | null
+          physical_address?: string | null
+          mailing_address?: string | null
+          phone?: string | null
+          email?: string | null
         }
         Relationships: []
       }
