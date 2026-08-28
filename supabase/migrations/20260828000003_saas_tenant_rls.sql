@@ -132,10 +132,19 @@ BEGIN
     ) THEN
       pol := t || '_tenant_isolation';
       EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol, t);
-      EXECUTE format(
-        'CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING (public.same_org(organization_id)) WITH CHECK (public.same_org(organization_id))',
-        pol, t
-      );
+      -- Super Admin profile has organization_id NULL. Allow own row so they can
+      -- load /platform instead of falling through to the employee dashboard.
+      IF t = 'profiles' THEN
+        EXECUTE format(
+          'CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING (id = auth.uid() OR public.same_org(organization_id)) WITH CHECK (id = auth.uid() OR public.same_org(organization_id))',
+          pol, t
+        );
+      ELSE
+        EXECUTE format(
+          'CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING (public.same_org(organization_id)) WITH CHECK (public.same_org(organization_id))',
+          pol, t
+        );
+      END IF;
     END IF;
   END LOOP;
 END $$;

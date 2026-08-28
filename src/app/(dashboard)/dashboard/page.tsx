@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import { AdminDashboard }    from '@/components/dashboard/AdminDashboard'
@@ -8,6 +9,7 @@ export const metadata = { title: 'Dashboard — WSSO' }
 
 export default async function DashboardPage() {
   const profile = await requireProfile()
+  if (profile.role === 'super_admin') redirect('/platform')
   const tz      = resolveTimezone(profile.timezone)
 
   return (

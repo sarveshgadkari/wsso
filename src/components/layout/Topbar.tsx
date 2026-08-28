@@ -70,14 +70,26 @@ export function Topbar({ profile, notifCount }: TopbarProps) {
         {/* User identity */}
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-neutral-800">{firstName}</span>
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
-              ROLE_CHIP[profile.role] ?? ROLE_CHIP.employee,
-            )}
-          >
-            {profile.role}
-          </span>
+          {profile.role === 'super_admin' ? (
+            <a
+              href="/platform"
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                ROLE_CHIP.super_admin,
+              )}
+            >
+              Super Admin
+            </a>
+          ) : (
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
+                ROLE_CHIP[profile.role] ?? ROLE_CHIP.employee,
+              )}
+            >
+              {profile.role}
+            </span>
+          )}
         </div>
 
         {/* Sign out */}
