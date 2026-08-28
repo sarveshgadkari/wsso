@@ -31,12 +31,37 @@ export async function POST(request: NextRequest) {
 
   const { data: callerProfile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, organization_id')
     .eq('id', caller.id)
     .single()
 
-  if (callerProfile?.role !== 'admin') {
+  if (callerProfile?.role !== 'admin' || !callerProfile.organization_id) {
     return NextResponse.json({ error: 'Forbidden: Admin only' }, { status: 403 })
+  }
+
+  const orgId = callerProfile.organization_id
+
+  const { data: org } = await supabaseAdmin
+    .from('organizations')
+    .select('id, seat_limit, status')
+    .eq('id', orgId)
+    .single()
+
+  if (!org || org.status === 'suspended' || org.status === 'cancelled') {
+    return NextResponse.json({ error: 'Workspace is not active' }, { status: 403 })
+  }
+
+  const { count: seatCount } = await supabaseAdmin
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .eq('status', 'active')
+
+  if ((seatCount ?? 0) >= org.seat_limit) {
+    return NextResponse.json(
+      { error: `Seat limit reached (${org.seat_limit}). Upgrade the plan or deactivate unused accounts.` },
+      { status: 403 },
+    )
   }
 
   // ── 2. Parse request body ───────────────────────────────────────────────────
@@ -64,6 +89,11 @@ export async function POST(request: NextRequest) {
     email,
     password: tempPassword,
     email_confirm: true, // skip the email-confirm step; they get a set-password link instead
+    user_metadata: {
+      full_name,
+      role,
+      organization_id: orgId,
+    },
   })
 
   if (authError || !authData.user) {
@@ -86,6 +116,7 @@ export async function POST(request: NextRequest) {
       email,
       phone:       phone ?? null,
       role,
+      organization_id: orgId,
       manager_id:  manager_id ?? null,
       team_id:     team_id ?? null,
       department:  department ?? null,
@@ -107,7 +138,11 @@ export async function POST(request: NextRequest) {
   // ── 5. Assign companies ─────────────────────────────────────────────────────
   const { error: companyError } = await supabaseAdmin
     .from('employee_companies')
-    .insert(company_ids.map((company_id) => ({ employee_id: profile.id, company_id })))
+    .insert(company_ids.map((company_id) => ({
+      employee_id: profile.id,
+      company_id,
+      organization_id: orgId,
+    })))
 
   if (companyError) {
     // Non-fatal: profile exists, but company assignment failed. Log and surface.

@@ -22,6 +22,7 @@ import {
   CalendarCheck,
   GraduationCap,
   Bot,
+  CreditCard,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
@@ -94,6 +95,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Connect AI',     href: '/connect-ai',         icon: Bot,      },
       { label: 'Notifications', href: '/notifications',      icon: Bell,     isNotifications: true },
+      { label: 'Billing',       href: '/settings/billing',   icon: CreditCard, roles: ['admin'] },
       { label: 'Admin Settings',href: '/settings/hierarchy', icon: Settings, roles: ['admin'] },
     ],
   },
@@ -128,3 +130,11 @@ export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/leave/team', '
 
 /** Paths accessible only to admin in the middleware */
 export const ADMIN_ONLY_PATHS = ['/companies', '/settings', '/api/admin', '/crm']
+
+export const PLATFORM_NAV: NavSection[] = [
+  {
+    items: [
+      { label: 'Workspaces', href: '/platform', icon: LayoutDashboard },
+    ],
+  },
+]

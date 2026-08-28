@@ -25,10 +25,15 @@ const PAGE_TITLES: [string, string][] = [
   ['/announcements',      'Announcements'],
   ['/notifications',      'Notifications'],
   ['/settings/hierarchy', 'Admin Settings'],
+  ['/settings/billing',   'Billing'],
+  ['/platform/payments',  'Payments'],
+  ['/platform/plans',     'Plans'],
+  ['/platform',           'Platform'],
   ['/connect-ai',         'Connect AI'],
 ]
 
 const ROLE_CHIP: Record<string, string> = {
+  super_admin: 'bg-amber-100 text-amber-800',
   admin:    'bg-rose-100    text-rose-700',
   director: 'bg-purple-100  text-purple-700',
   manager:  'bg-primary-100 text-primary-700',
@@ -57,8 +62,10 @@ export function Topbar({ profile, notifCount }: TopbarProps) {
 
       {/* Right-side actions */}
       <div className="flex items-center gap-5">
-        {/* Notifications bell — live dropdown + Realtime */}
-        <NotificationBell initialCount={notifCount} userId={profile.id} />
+        {/* Notifications bell — live dropdown + Realtime (workspace users only) */}
+        {profile.role !== 'super_admin' && (
+          <NotificationBell initialCount={notifCount} userId={profile.id} />
+        )}
 
         {/* User identity */}
         <div className="flex items-center gap-2">

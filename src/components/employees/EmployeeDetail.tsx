@@ -44,6 +44,7 @@ const profileSchema = z.object({
 type ProfileForm = z.infer<typeof profileSchema>
 
 const ROLE_VARIANT: Record<UserRole, 'danger' | 'purple' | 'info' | 'default'> = {
+  super_admin: 'danger',
   admin:    'danger',
   director: 'purple',
   manager:  'info',
@@ -85,7 +86,7 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
       full_name:  emp.full_name,
       phone:      emp.phone      ?? '',
       department: emp.department ?? '',
-      role:       emp.role,
+      role:       emp.role === 'super_admin' ? 'admin' : emp.role,
       timezone:   emp.timezone,
     },
   })

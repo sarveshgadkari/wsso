@@ -1,12 +1,13 @@
-import { requireProfile } from '@/lib/auth/session'
+import { requireProfile, isSuperAdmin } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { ToastContainer } from '@/components/ui/Toast'
+import { redirect } from 'next/navigation'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // Redirect to /login if no valid session
   const profile = await requireProfile()
+  if (isSuperAdmin(profile)) redirect('/platform')
 
   // Fetch unread notification count
   const supabase = await createClient()

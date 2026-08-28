@@ -18,6 +18,7 @@ export interface EmployeeListRow extends Omit<Profile, 'team_id' | 'manager_id'>
 }
 
 const ROLE_VARIANT = {
+  super_admin: 'danger',
   admin:    'danger',
   director: 'purple',
   manager:  'info',

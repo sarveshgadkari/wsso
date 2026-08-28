@@ -71,6 +71,7 @@ export default async function ActivityLogPage({ searchParams }: PageProps) {
   }
 
   const scopeLabel = {
+    super_admin: 'across the platform',
     admin:    'across the organisation',
     director: 'across the organisation',
     manager:  'across your team',

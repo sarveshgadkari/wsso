@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { Profile, UserRole } from '@/lib/types'
+import type { Organization, Profile, UserRole } from '@/lib/types'
+import { orgHardBlocked, orgNeedsPayment } from '@/lib/saas/plans'
 
-// Call from Server Components and API route handlers.
-// Returns null rather than throwing — lets callers decide how to handle no-session.
+export function isSuperAdmin(profile: Pick<Profile, 'role'>): boolean {
+  return profile.role === 'super_admin'
+}
 
 export async function getUser() {
   const supabase = await createClient()
@@ -25,8 +27,16 @@ export async function getProfile(): Promise<Profile | null> {
   return data ?? null
 }
 
-// Guards — redirect when the condition isn't met.
-// Use at the top of Server Components that require auth.
+export async function getOrganization(orgId: string | null): Promise<Organization | null> {
+  if (!orgId) return null
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', orgId)
+    .single()
+  return data ?? null
+}
 
 export async function requireAuth() {
   const user = await getUser()
@@ -38,19 +48,51 @@ export async function requireProfile() {
   const profile = await getProfile()
   if (!profile) redirect('/login')
 
-  // Inactive accounts lose access immediately — sign out and send them to login
   if (profile.status === 'inactive') {
     const supabase = await createClient()
     await supabase.auth.signOut()
     redirect('/login?error=account_inactive')
   }
 
+  if (!isSuperAdmin(profile)) {
+    const org = await getOrganization(profile.organization_id)
+    if (!org) {
+      const supabase = await createClient()
+      await supabase.auth.signOut()
+      redirect('/login?error=no_workspace')
+    }
+    if (orgHardBlocked(org)) {
+      const supabase = await createClient()
+      await supabase.auth.signOut()
+      redirect('/login?error=org_blocked')
+    }
+
+    if (orgNeedsPayment(org) && profile.role !== 'admin') {
+      const supabase = await createClient()
+      await supabase.auth.signOut()
+      redirect('/login?error=org_blocked')
+    }
+  }
+
   return profile
 }
 
-// Throws/redirects if the current user's role isn't in the allowed list.
 export async function requireRole(allowed: UserRole[]) {
   const profile = await requireProfile()
   if (!allowed.includes(profile.role)) redirect('/dashboard')
+  return profile
+}
+
+export async function requireSuperAdmin() {
+  const profile = await requireProfile()
+  if (!isSuperAdmin(profile)) redirect('/dashboard')
+  return profile
+}
+
+export async function requireOrgContext() {
+  const profile = await requireProfile()
+  if (isSuperAdmin(profile) || !profile.organization_id) {
+    redirect('/platform')
+  }
   return profile
 }

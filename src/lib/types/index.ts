@@ -5,6 +5,9 @@ import type { Database } from './database'
 // Use these throughout the app instead of the verbose Database['public']['Tables']…
 type Tables = Database['public']['Tables']
 
+export type Organization    = Tables['organizations']['Row']
+export type SubscriptionPlan = Tables['subscription_plans']['Row']
+export type OrganizationPayment = Tables['organization_payments']['Row']
 export type Profile          = Tables['profiles']['Row']
 export type Company          = Tables['companies']['Row']
 export type Team             = Tables['teams']['Row']
@@ -61,6 +64,8 @@ export type UpdateTacticNextStep  = Tables['tactic_next_steps']['Update']
 type Enums = Database['public']['Enums']
 
 export type UserRole         = Enums['user_role']
+export type OrgPlan          = Enums['org_plan']
+export type OrgStatus        = Enums['org_status']
 export type ProfileStatus    = Enums['profile_status']
 export type ProjectStatus    = Enums['project_status']
 export type TacticPriority   = Enums['tactic_priority']
@@ -73,7 +78,11 @@ export type LeaveStatus      = Enums['leave_status']
 export type HalfDayPeriod    = Enums['half_day_period']
 
 // ── Const arrays for UI (select dropdowns, filter chips, etc.) ────────────────
-export const USER_ROLES    = ['admin', 'director', 'manager', 'employee']  as const satisfies UserRole[]
+export const USER_ROLES     = ['admin', 'director', 'manager', 'employee'] as const satisfies readonly UserRole[]
+export const ORG_USER_ROLES = USER_ROLES
+export const ALL_USER_ROLES = ['super_admin', 'admin', 'director', 'manager', 'employee'] as const satisfies UserRole[]
+export const ORG_PLANS      = ['trial', 'starter', 'growth', 'business', 'enterprise'] as const satisfies OrgPlan[]
+export const ORG_STATUSES   = ['trial', 'active', 'past_due', 'suspended', 'cancelled'] as const satisfies OrgStatus[]
 export const TACTIC_STATUSES = ['assigned', 'in_progress', 'review', 'done', 'archived'] as const satisfies TacticStatus[]
 export const TACTIC_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const satisfies TacticPriority[]
 export const PROJECT_STATUSES  = ['active', 'on_hold', 'completed']    as const satisfies ProjectStatus[]

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { isSignupEnabled } from '@/lib/saas/plans'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email address'),
@@ -49,7 +50,7 @@ export function LoginForm() {
     if (user) {
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('status')
+        .select('status, role, organization_id')
         .eq('id', user.id)
         .single()
 
@@ -59,6 +60,39 @@ export function LoginForm() {
           message: 'Your account has been deactivated. Contact your administrator.',
         })
         return
+      }
+
+      if (profileRow?.role === 'super_admin') {
+        router.push('/platform')
+        router.refresh()
+        return
+      }
+
+      if (profileRow?.organization_id) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('status, trial_ends_at')
+          .eq('id', profileRow.organization_id)
+          .single()
+
+        if (org?.status === 'suspended' || org?.status === 'cancelled') {
+          await supabase.auth.signOut()
+          setError('root', {
+            message: 'This workspace is suspended. Contact support.',
+          })
+          return
+        }
+        if (
+          org?.status === 'trial' &&
+          org.trial_ends_at &&
+          new Date(org.trial_ends_at) < new Date()
+        ) {
+          await supabase.auth.signOut()
+          setError('root', {
+            message: 'Your trial has ended. Contact support to upgrade.',
+          })
+          return
+        }
       }
     }
 
@@ -107,6 +141,15 @@ export function LoginForm() {
       <Button type="submit" loading={isSubmitting} size="lg" className="w-full mt-1">
         Sign in
       </Button>
+
+      {isSignupEnabled() && (
+        <p className="text-center text-sm text-neutral-500">
+          New customer?{' '}
+          <Link href="/signup" className="text-primary-600 hover:underline">
+            Create a workspace
+          </Link>
+        </p>
+      )}
     </form>
   )
 }

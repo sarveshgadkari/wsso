@@ -14,6 +14,176 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          plan: Database['public']['Enums']['org_plan']
+          plan_id: string | null
+          status: Database['public']['Enums']['org_status']
+          seat_limit: number
+          trial_ends_at: string | null
+          billing_email: string | null
+          notes: string | null
+          mcp_enabled: boolean
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          billing_interval: 'month' | 'year' | null
+          current_period_end: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          plan?: Database['public']['Enums']['org_plan']
+          plan_id?: string | null
+          status?: Database['public']['Enums']['org_status']
+          seat_limit?: number
+          trial_ends_at?: string | null
+          billing_email?: string | null
+          notes?: string | null
+          mcp_enabled?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          billing_interval?: 'month' | 'year' | null
+          current_period_end?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          plan?: Database['public']['Enums']['org_plan']
+          plan_id?: string | null
+          status?: Database['public']['Enums']['org_status']
+          seat_limit?: number
+          trial_ends_at?: string | null
+          billing_email?: string | null
+          notes?: string | null
+          mcp_enabled?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          billing_interval?: 'month' | 'year' | null
+          current_period_end?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'organizations_plan_id_fkey'
+            columns: ['plan_id']
+            referencedRelation: 'subscription_plans'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
+      subscription_plans: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          monthly_price_cents: number
+          yearly_price_cents: number
+          seat_limit: number
+          trial_days: number
+          is_active: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          monthly_price_cents?: number
+          yearly_price_cents?: number
+          seat_limit?: number
+          trial_days?: number
+          is_active?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          monthly_price_cents?: number
+          yearly_price_cents?: number
+          seat_limit?: number
+          trial_days?: number
+          is_active?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+
+      organization_payments: {
+        Row: {
+          id: string
+          organization_id: string
+          plan_id: string | null
+          amount_cents: number
+          currency: string
+          billing_interval: 'month' | 'year'
+          status: 'pending' | 'paid' | 'failed' | 'refunded'
+          provider: 'stripe' | 'manual'
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          notes: string | null
+          created_by: string | null
+          paid_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          plan_id?: string | null
+          amount_cents: number
+          currency?: string
+          billing_interval: 'month' | 'year'
+          status?: 'pending' | 'paid' | 'failed' | 'refunded'
+          provider?: 'stripe' | 'manual'
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          paid_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          plan_id?: string | null
+          amount_cents?: number
+          currency?: string
+          billing_interval?: 'month' | 'year'
+          status?: 'pending' | 'paid' | 'failed' | 'refunded'
+          provider?: 'stripe' | 'manual'
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          paid_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'organization_payments_organization_id_fkey'
+            columns: ['organization_id']
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       profiles: {
         Row: {
           id: string
@@ -22,6 +192,7 @@ export type Database = {
           email: string
           phone: string | null
           role: Database['public']['Enums']['user_role']
+          organization_id: string | null
           manager_id: string | null
           team_id: string | null
           department: string | null
@@ -37,6 +208,7 @@ export type Database = {
           email: string
           phone?: string | null
           role?: Database['public']['Enums']['user_role']
+          organization_id?: string | null
           manager_id?: string | null
           team_id?: string | null
           department?: string | null
@@ -52,6 +224,7 @@ export type Database = {
           email?: string
           phone?: string | null
           role?: Database['public']['Enums']['user_role']
+          organization_id?: string | null
           manager_id?: string | null
           team_id?: string | null
           department?: string | null
@@ -60,6 +233,12 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: 'profiles_organization_id_fkey'
+            columns: ['organization_id']
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
           {
             foreignKeyName: 'profiles_manager_id_fkey'
             columns: ['manager_id']
@@ -80,6 +259,7 @@ export type Database = {
           id: string
           code: string
           name: string
+          organization_id: string
           ein_number: string | null
           physical_address: string | null
           mailing_address: string | null
@@ -91,6 +271,7 @@ export type Database = {
           id?: string
           code?: string       // auto-generated (TLB001…)
           name: string
+          organization_id?: string
           ein_number?: string | null
           physical_address?: string | null
           mailing_address?: string | null
@@ -102,13 +283,21 @@ export type Database = {
           id?: string
           code?: string
           name?: string
+          organization_id?: string
           ein_number?: string | null
           physical_address?: string | null
           mailing_address?: string | null
           phone?: string | null
           email?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'companies_organization_id_fkey'
+            columns: ['organization_id']
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
       }
 
       teams: {
@@ -155,14 +344,17 @@ export type Database = {
         Row: {
           employee_id: string
           company_id: string
+          organization_id: string
         }
         Insert: {
           employee_id: string
           company_id: string
+          organization_id?: string
         }
         Update: {
           employee_id?: string
           company_id?: string
+          organization_id?: string
         }
         Relationships: [
           {
@@ -362,6 +554,7 @@ export type Database = {
           description: string | null
           training_notes: string | null
           training_link: string | null
+          organization_id: string
           project_id: string | null
           assigned_to: string
           created_by: string
@@ -379,6 +572,7 @@ export type Database = {
           description?: string | null
           training_notes?: string | null
           training_link?: string | null
+          organization_id?: string
           project_id?: string | null
           assigned_to: string
           created_by: string
@@ -1318,10 +1512,36 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string | null
       }
+      get_my_org_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string | null
+      }
+      is_super_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      same_org: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
+      org_active_seat_count: {
+        Args: { p_org_id: string }
+        Returns: number
+      }
+      org_can_add_seat: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
+      org_is_access_allowed: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
     }
 
     Enums: {
-      user_role: 'admin' | 'director' | 'manager' | 'employee'
+      user_role: 'super_admin' | 'admin' | 'director' | 'manager' | 'employee'
+      org_plan: 'trial' | 'starter' | 'growth' | 'business' | 'enterprise'
+      org_status: 'trial' | 'active' | 'past_due' | 'suspended' | 'cancelled'
       profile_status: 'active' | 'inactive'
       project_status: 'active' | 'on_hold' | 'completed'
       tactic_priority: 'low' | 'medium' | 'high' | 'critical'

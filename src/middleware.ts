@@ -1,30 +1,27 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Paths that do NOT require auth — everything else does.
-const PUBLIC_PATHS = new Set(['/', '/login', '/forgot-password', '/reset-password'])
-// Prefix-based public paths (e.g. /auth/callback, /auth/signout)
-const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/']
+const PUBLIC_PATHS = new Set(['/', '/login', '/forgot-password', '/reset-password', '/signup'])
+const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/', '/api/signup', '/api/billing/webhook']
 
-// Authenticated-but-any-role redirect targets for already-authed users on auth pages
-const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password'])
+const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password', '/signup'])
 
-// Paths that require role = 'admin'
 const ADMIN_PREFIXES = ['/api/admin', '/admin', '/companies', '/settings', '/crm']
-
-// Paths that require role = 'admin' OR 'manager'
 const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports']
+const PLATFORM_PREFIXES = ['/platform', '/api/platform']
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true
-  // Connect AI helper requires a logged-in browser session (not Bearer MCP)
   if (pathname.startsWith('/api/mcp/connection')) return false
   if (pathname === '/api/mcp') return true
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
 }
 
+function isPlatformPath(pathname: string): boolean {
+  return PLATFORM_PREFIXES.some((p) => pathname.startsWith(p))
+}
+
 export async function middleware(request: NextRequest) {
-  // ── Mutable response — must thread cookie mutations through ───────────────
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -46,8 +43,6 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: always call getUser() first — it refreshes the session token
-  // and writes updated cookies into supabaseResponse. Never short-circuit before this.
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -55,7 +50,6 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isApi = pathname.startsWith('/api/')
 
-  // ── 1. Unauthenticated access to protected routes → /login ─────────────────
   if (!isPublic(pathname) && !user) {
     if (isApi) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -65,41 +59,81 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // ── 2. Admin-only routes ────────────────────────────────────────────────────
-  const isAdminRoute = ADMIN_PREFIXES.some((p) => pathname.startsWith(p))
-  if (isAdminRoute && user) {
+  if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, status, organization_id')
       .eq('id', user.id)
       .single()
 
-    if (profile?.role !== 'admin') {
-      return isApi
-        ? NextResponse.json({ error: 'Forbidden: Admin only' }, { status: 403 })
-        : NextResponse.redirect(new URL('/dashboard', request.url))
+    const role = profile?.role
+
+    if (role === 'super_admin') {
+      if (AUTH_ONLY_PATHS.has(pathname)) {
+        return NextResponse.redirect(new URL('/platform', request.url))
+      }
+      if (!isPlatformPath(pathname) && !isPublic(pathname) && !pathname.startsWith('/auth/')) {
+        if (isApi && pathname.startsWith('/api/cron')) {
+          return supabaseResponse
+        }
+        if (isApi) {
+          return NextResponse.json({ error: 'Forbidden: Super Admin uses /platform' }, { status: 403 })
+        }
+        return NextResponse.redirect(new URL('/platform', request.url))
+      }
+      return supabaseResponse
     }
-  }
 
-  // ── 3. Manager-or-admin routes ─────────────────────────────────────────────
-  const isManagerRoute = MANAGER_ADMIN_PREFIXES.some((p) => pathname.startsWith(p))
-  if (isManagerRoute && user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    if (isPlatformPath(pathname)) {
       return isApi
         ? NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         : NextResponse.redirect(new URL('/dashboard', request.url))
     }
+
+    const isAdminRoute = ADMIN_PREFIXES.some((p) => pathname.startsWith(p))
+    if (isAdminRoute && role !== 'admin') {
+      return isApi
+        ? NextResponse.json({ error: 'Forbidden: Admin only' }, { status: 403 })
+        : NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    const isManagerRoute = MANAGER_ADMIN_PREFIXES.some((p) => pathname.startsWith(p))
+    if (isManagerRoute && (!role || !['admin', 'manager'].includes(role))) {
+      return isApi
+        ? NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        : NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    if (profile?.organization_id && role !== 'super_admin') {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('status, trial_ends_at, current_period_end')
+        .eq('id', profile.organization_id)
+        .single()
+
+      const paymentDue =
+        org &&
+        (org.status === 'past_due' ||
+          (org.status === 'trial' && org.trial_ends_at && new Date(org.trial_ends_at) < new Date()) ||
+          (org.status === 'active' && org.current_period_end && new Date(org.current_period_end) < new Date()))
+
+      const billingPath =
+        pathname === '/settings/billing' ||
+        pathname.startsWith('/api/billing/') ||
+        pathname.startsWith('/auth/')
+
+      if (paymentDue && role === 'admin' && !billingPath && !isPublic(pathname)) {
+        if (isApi) {
+          return NextResponse.json({ error: 'Payment required' }, { status: 402 })
+        }
+        return NextResponse.redirect(new URL('/settings/billing?pay=1', request.url))
+      }
+    }
   }
 
-  // ── 4. Redirect authenticated users away from login / forgot-password ──────
   if (user && AUTH_ONLY_PATHS.has(pathname)) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    const dest = new URL('/dashboard', request.url)
+    return NextResponse.redirect(dest)
   }
 
   return supabaseResponse

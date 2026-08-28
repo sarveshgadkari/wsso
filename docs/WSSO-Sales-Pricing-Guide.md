@@ -259,7 +259,7 @@ Always use a short **Statement of Work (SOW)** for custom work: scope, timeline,
 | Topic | Recommendation |
 |---|---|
 | Billing cycle | Monthly card **or** annual invoice |
-| Payment | Stripe / invoice Net-15 or Net-30 (US) |
+| Payment | **Stripe** (workspace admin pays for the company). Invoice / Net-15 as Super Admin “Mark paid” backup only |
 | Free trial | 14 days SaaS **or** paid pilot ($499) |
 | Seat true-up | Monthly or quarterly |
 | Data ownership | Client owns their data; export on request |

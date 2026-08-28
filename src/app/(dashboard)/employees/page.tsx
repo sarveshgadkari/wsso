@@ -17,7 +17,7 @@ export default async function EmployeesPage() {
   const supabase = await createClient()
 
   const [profilesRes, teamsRes, companiesRes, ecRes] = await Promise.all([
-    supabase.from('profiles').select('*').order('full_name'),
+    supabase.from('profiles').select('*').neq('role', 'super_admin').order('full_name'),
     supabase.from('teams').select('id, name, code, manager_id').order('name'),
     supabase.from('companies').select('id, name, code').order('name'),
     supabase.from('employee_companies').select('employee_id, company_id'),
