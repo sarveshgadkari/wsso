@@ -36,7 +36,7 @@ const updateOrgSchema = z.object({
 })
 
 async function uniqueSlug(base: string): Promise<string> {
-  let slug = slugify(base)
+  const slug = slugify(base)
   for (let i = 0; i < 20; i++) {
     const candidate = i === 0 ? slug : `${slug}-${i + 1}`
     const { data } = await supabaseAdmin

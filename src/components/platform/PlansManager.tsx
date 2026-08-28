@@ -21,7 +21,6 @@ function centsToDollars(cents: number): string {
 
 export function PlansManager({ plans }: { plans: SubscriptionPlan[] }) {
   const router = useRouter()
-  const toast = useToast()
   const [editing, setEditing] = useState<string | 'new' | null>(null)
 
   return (
