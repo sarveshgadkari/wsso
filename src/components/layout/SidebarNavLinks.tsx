@@ -9,18 +9,22 @@ import type { UserRole } from '@/lib/types'
 interface SidebarNavLinksProps {
   role: UserRole
   notifCount: number
+  subscriptionLocked?: boolean
 }
 
-export function SidebarNavLinks({ role, notifCount }: SidebarNavLinksProps) {
+export function SidebarNavLinks({ role, notifCount, subscriptionLocked = false }: SidebarNavLinksProps) {
   const pathname = usePathname()
 
   return (
     <nav className="flex flex-col gap-1 px-3" aria-label="Main navigation">
       {NAV_SECTIONS.map((section, si) => {
-        // Server-side filter: items not matching role are never in the DOM
-        const visible = section.items.filter(
-          (item) => !item.roles || item.roles.includes(role)
-        )
+        const visible = section.items.filter((item) => {
+          if (item.roles && !item.roles.includes(role)) return false
+          if (subscriptionLocked) {
+            return item.href === '/dashboard' || item.href === '/settings/billing'
+          }
+          return true
+        })
         if (visible.length === 0) return null
 
         return (

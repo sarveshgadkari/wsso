@@ -82,17 +82,6 @@ export function LoginForm() {
           })
           return
         }
-        if (
-          org?.status === 'trial' &&
-          org.trial_ends_at &&
-          new Date(org.trial_ends_at) < new Date()
-        ) {
-          await supabase.auth.signOut()
-          setError('root', {
-            message: 'Your trial has ended. Contact support to upgrade.',
-          })
-          return
-        }
       }
     }
 

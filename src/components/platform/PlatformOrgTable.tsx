@@ -12,6 +12,8 @@ import type { Organization, SubscriptionPlan } from '@/lib/types'
 export interface OrgListRow extends Organization {
   seat_count: number
   plan_name?: string
+  work_orders: number
+  payment_due: boolean
 }
 
 function statusVariant(status: Organization['status']) {
@@ -46,13 +48,14 @@ export function PlatformOrgTable({ orgs, plans }: Props) {
               <th className="px-4 py-3 font-semibold">Plan</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Seats</th>
+              <th className="px-4 py-3 font-semibold">Work orders</th>
               <th className="px-4 py-3 font-semibold">Created</th>
             </tr>
           </thead>
           <tbody>
             {orgs.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-neutral-400">
+                <td colSpan={6} className="px-4 py-10 text-center text-neutral-400">
                   No workspaces yet. Create the first one.
                 </td>
               </tr>
@@ -68,10 +71,17 @@ export function PlatformOrgTable({ orgs, plans }: Props) {
                 <td className="px-4 py-3">{org.plan_name ?? PLAN_LABELS[org.plan]}</td>
                 <td className="px-4 py-3">
                   <Badge variant={statusVariant(org.status)}>{STATUS_LABELS[org.status]}</Badge>
+                  {org.payment_due && org.status !== 'past_due' && (
+                    <p className="mt-1 text-[11px] text-warning-700">Payment due</p>
+                  )}
                 </td>
                 <td className="px-4 py-3 tabular-nums">
                   {org.seat_count} / {org.seat_limit}
+                  {org.seat_count > org.seat_limit && (
+                    <span className="ml-1 text-xs text-danger-700">over</span>
+                  )}
                 </td>
+                <td className="px-4 py-3 tabular-nums">{org.work_orders}</td>
                 <td className="px-4 py-3 text-neutral-500">
                   {new Date(org.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </td>

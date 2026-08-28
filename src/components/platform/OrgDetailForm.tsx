@@ -8,14 +8,15 @@ import { Button } from '@/components/ui/Button'
 import { updateOrganization, inviteOrgAdmin, setOrganizationStatus } from '@/lib/actions/platform'
 import { markOrganizationPaid } from '@/lib/actions/billing'
 import { useToast } from '@/lib/store/toast'
-import { formatUsd, STATUS_LABELS } from '@/lib/saas/plans'
+import { formatUsd, STATUS_LABELS, orgNeedsPayment } from '@/lib/saas/plans'
 import type { Organization, OrgStatus, Profile, SubscriptionPlan } from '@/lib/types'
+import type { OrgUsageStats } from '@/lib/saas/org-usage'
 
 interface Props {
   org: Organization
   plans: SubscriptionPlan[]
   members: Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'status' | 'employee_code'>[]
-  stats: { companies: number; workOrders: number }
+  stats: OrgUsageStats
 }
 
 export function OrgDetailForm({ org, plans, members, stats }: Props) {
@@ -159,11 +160,69 @@ export function OrgDetailForm({ org, plans, members, stats }: Props) {
 
       <div className="flex flex-col gap-4">
         <div className="card p-5">
-          <h3 className="text-sm font-semibold text-neutral-900">Usage</h3>
+          <h3 className="text-sm font-semibold text-neutral-900">Usage (for billing)</h3>
+          <p className="mt-1 text-xs text-neutral-400">
+            {orgNeedsPayment(org) ? 'No active subscription — team dashboards are locked.' : 'Workspace is unlocked.'}
+          </p>
           <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-neutral-500">People</dt><dd className="font-medium">{members.filter((m) => m.status === 'active').length} / {org.seat_limit}</dd></div>
-            <div className="flex justify-between"><dt className="text-neutral-500">Companies</dt><dd className="font-medium">{stats.companies}</dd></div>
-            <div className="flex justify-between"><dt className="text-neutral-500">Work orders</dt><dd className="font-medium">{stats.workOrders}</dd></div>
+            <div className="flex justify-between">
+              <dt className="text-neutral-500">Active users</dt>
+              <dd className="font-medium tabular-nums">{stats.usersActive} / {org.seat_limit} seats</dd>
+            </div>
+            <div className="flex justify-between text-xs">
+              <dt className="text-neutral-400">Admins</dt>
+              <dd className="tabular-nums">{stats.admins}</dd>
+            </div>
+            <div className="flex justify-between text-xs">
+              <dt className="text-neutral-400">Directors</dt>
+              <dd className="tabular-nums">{stats.directors}</dd>
+            </div>
+            <div className="flex justify-between text-xs">
+              <dt className="text-neutral-400">Managers</dt>
+              <dd className="tabular-nums">{stats.managers}</dd>
+            </div>
+            <div className="flex justify-between text-xs">
+              <dt className="text-neutral-400">Employees</dt>
+              <dd className="tabular-nums">{stats.employees}</dd>
+            </div>
+            <div className="flex justify-between border-t border-neutral-100 pt-2">
+              <dt className="text-neutral-500">Companies</dt>
+              <dd className="font-medium">{stats.companies}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-neutral-500">Clients</dt>
+              <dd className="font-medium">{stats.clients}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-neutral-500">Projects</dt>
+              <dd className="font-medium">{stats.projects}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-neutral-500">Work orders</dt>
+              <dd className="font-medium">{stats.workOrders}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-neutral-500">Documents</dt>
+              <dd className="font-medium">{stats.documents}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-neutral-500">Time logs</dt>
+              <dd className="font-medium">{stats.timeLogs}</dd>
+            </div>
+            <div className="flex justify-between border-t border-neutral-100 pt-2">
+              <dt className="text-neutral-500">Last paid</dt>
+              <dd className="font-medium">
+                {stats.lastPaidAt
+                  ? `${formatUsd(stats.lastPaidCents ?? 0)} · ${new Date(stats.lastPaidAt).toLocaleDateString()}`
+                  : 'Never'}
+              </dd>
+            </div>
+            {org.current_period_end && (
+              <div className="flex justify-between">
+                <dt className="text-neutral-500">Period ends</dt>
+                <dd className="font-medium">{new Date(org.current_period_end).toLocaleDateString()}</dd>
+              </div>
+            )}
           </dl>
         </div>
 

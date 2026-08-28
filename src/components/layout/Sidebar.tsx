@@ -4,11 +4,12 @@ import type { UserRole } from '@/lib/types'
 interface SidebarProps {
   role: UserRole
   notifCount: number
+  subscriptionLocked?: boolean
 }
 
 // Server Component — no client-side hooks.
 // SidebarNavLinks (client) handles usePathname() for active highlighting.
-export function Sidebar({ role, notifCount }: SidebarProps) {
+export function Sidebar({ role, notifCount, subscriptionLocked = false }: SidebarProps) {
   return (
     <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
       {/* Brand */}
@@ -21,7 +22,7 @@ export function Sidebar({ role, notifCount }: SidebarProps) {
 
       {/* Scrollable nav */}
       <div className="flex-1 overflow-y-auto py-3">
-        <SidebarNavLinks role={role} notifCount={notifCount} />
+        <SidebarNavLinks role={role} notifCount={notifCount} subscriptionLocked={subscriptionLocked} />
       </div>
 
       {/* Footer */}

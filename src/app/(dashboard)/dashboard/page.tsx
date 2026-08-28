@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
-import { requireProfile } from '@/lib/auth/session'
+import { getOrganization, requireProfile } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { orgNeedsPayment } from '@/lib/saas/plans'
 import { AdminDashboard }    from '@/components/dashboard/AdminDashboard'
 import { ManagerDashboard }  from '@/components/dashboard/ManagerDashboard'
 import { EmployeeDashboard } from '@/components/dashboard/EmployeeDashboard'
+import { SubscriptionLocked } from '@/components/billing/SubscriptionLocked'
 
 export const metadata = { title: 'Dashboard — WSSO' }
 
@@ -11,6 +13,9 @@ export default async function DashboardPage() {
   const profile = await requireProfile()
   if (profile.role === 'super_admin') redirect('/platform')
   const tz      = resolveTimezone(profile.timezone)
+  const org     = await getOrganization(profile.organization_id)
+  const locked  = org ? orgNeedsPayment(org) : false
+  const isAdmin = profile.role === 'admin'
 
   return (
     <div className="flex flex-col gap-6">
@@ -28,7 +33,9 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {profile.role === 'admin' || profile.role === 'director' ? (
+      {locked ? (
+        <SubscriptionLocked isAdmin={isAdmin} />
+      ) : profile.role === 'admin' || profile.role === 'director' ? (
         <AdminDashboard />
       ) : profile.role === 'manager' ? (
         <ManagerDashboard />

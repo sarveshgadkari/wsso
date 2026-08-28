@@ -117,16 +117,17 @@ export async function middleware(request: NextRequest) {
           (org.status === 'trial' && org.trial_ends_at && new Date(org.trial_ends_at) < new Date()) ||
           (org.status === 'active' && org.current_period_end && new Date(org.current_period_end) < new Date()))
 
-      const billingPath =
-        pathname === '/settings/billing' ||
+      const allowedWhileLocked =
+        pathname === '/dashboard' ||
+        pathname.startsWith('/auth/') ||
         pathname.startsWith('/api/billing/') ||
-        pathname.startsWith('/auth/')
+        (role === 'admin' && (pathname === '/settings/billing' || pathname.startsWith('/settings/billing')))
 
-      if (paymentDue && role === 'admin' && !billingPath && !isPublic(pathname)) {
+      if (paymentDue && !allowedWhileLocked && !isPublic(pathname)) {
         if (isApi) {
-          return NextResponse.json({ error: 'Payment required' }, { status: 402 })
+          return NextResponse.json({ error: 'Subscription required' }, { status: 402 })
         }
-        return NextResponse.redirect(new URL('/settings/billing?pay=1', request.url))
+        return NextResponse.redirect(new URL('/dashboard', request.url))
       }
     }
   }

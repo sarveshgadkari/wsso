@@ -29,7 +29,7 @@ export default function LoginPage({ searchParams }: Props) {
 
       {searchParams.error === 'org_blocked' && (
         <div className="mb-4 rounded-md border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700">
-          This workspace is suspended, cancelled, or the trial has ended. Contact support.
+          This workspace is suspended. Contact support.
         </div>
       )}
 

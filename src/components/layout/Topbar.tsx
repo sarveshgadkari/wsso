@@ -43,9 +43,10 @@ const ROLE_CHIP: Record<string, string> = {
 interface TopbarProps {
   profile: Profile
   notifCount: number
+  hideNotifications?: boolean
 }
 
-export function Topbar({ profile, notifCount }: TopbarProps) {
+export function Topbar({ profile, notifCount, hideNotifications = false }: TopbarProps) {
   const pathname = usePathname()
 
   // Longest-prefix match for page title
@@ -63,7 +64,7 @@ export function Topbar({ profile, notifCount }: TopbarProps) {
       {/* Right-side actions */}
       <div className="flex items-center gap-5">
         {/* Notifications bell — live dropdown + Realtime (workspace users only) */}
-        {profile.role !== 'super_admin' && (
+        {profile.role !== 'super_admin' && !hideNotifications && (
           <NotificationBell initialCount={notifCount} userId={profile.id} />
         )}
 

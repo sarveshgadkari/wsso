@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Organization, Profile, UserRole } from '@/lib/types'
-import { orgHardBlocked, orgNeedsPayment } from '@/lib/saas/plans'
+import { orgHardBlocked } from '@/lib/saas/plans'
 
 export function isSuperAdmin(profile: Pick<Profile, 'role'>): boolean {
   return profile.role === 'super_admin'
@@ -62,12 +62,6 @@ export async function requireProfile() {
       redirect('/login?error=no_workspace')
     }
     if (orgHardBlocked(org)) {
-      const supabase = await createClient()
-      await supabase.auth.signOut()
-      redirect('/login?error=org_blocked')
-    }
-
-    if (orgNeedsPayment(org) && profile.role !== 'admin') {
       const supabase = await createClient()
       await supabase.auth.signOut()
       redirect('/login?error=org_blocked')
