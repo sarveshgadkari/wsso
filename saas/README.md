@@ -12,7 +12,7 @@ After SQL is applied, the app already contains Super Admin, tenant isolation, si
 | 4 | `04_bootstrap_super_admin.sql` | **Edit the email**, then run — promotes you to platform Super Admin |
 | 5 | `05_verify.sql` | Optional sanity checks (read-only) |
 | 6 | `06_subscription_plans_and_payments.sql` | Dynamic plans Super Admin edits + payment records |
-| 7 | `07_super_admin_profile_access.sql` | Lets Super Admin (null workspace) read their own profile so they land on `/platform` |
+| 8 | `08_time_log_day_cap.sql` | Caps a work day at 24 hours and clips clock-out at local midnight |
 
 The same SQL is also copied to `supabase/migrations/20260828000001–03_saas_*.sql` so it stays in git history.
 

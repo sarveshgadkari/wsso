@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 
 export const runtime = 'nodejs'
 
-// Called by Vercel Cron (vercel.json) once daily at 00:00 UTC.
-// Vercel Hobby plan allows only daily cron jobs; Pro+ supports sub-daily schedules.
-// Finds any open time_log sessions older than 12 hours and closes them
-// with closed_reason = 'auto_logout'.  The _trg_calc_duration trigger
-// automatically computes duration_minutes from the timestamps.
+// Vercel Cron (vercel.json) — hourly so each employee's local midnight is caught.
+// Closes open sessions at 00:00 in that person's timezone, never more than 24 hours.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {
@@ -17,41 +14,12 @@ export async function GET(request: Request) {
     }
   }
 
-  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
-
-  const { data: stale, error: fetchErr } = await supabaseAdmin
-    .from('time_logs')
-    .select('id, clock_in_at')
-    .is('clock_out_at', null)
-    .lt('clock_in_at', twelveHoursAgo)
-
-  if (fetchErr) {
-    console.error('[auto-logout] fetch error:', fetchErr.message)
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+  try {
+    const closed = await closeOpenSessionsPastMidnight()
+    return NextResponse.json({ closed, message: closed ? `Closed ${closed} session(s) at local midnight.` : 'No sessions past local midnight.' })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Auto-logout failed'
+    console.error('[auto-logout]', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  if (!stale?.length) {
-    return NextResponse.json({ closed: 0, message: 'No stale sessions.' })
-  }
-
-  let closed = 0
-  for (const session of stale) {
-    const autoClockOut = new Date(
-      new Date(session.clock_in_at).getTime() + 12 * 60 * 60 * 1000,
-    ).toISOString()
-
-    const { error } = await supabaseAdmin
-      .from('time_logs')
-      .update({ clock_out_at: autoClockOut, closed_reason: 'auto_logout' })
-      .eq('id', session.id)
-
-    if (error) {
-      console.error(`[auto-logout] failed to close session ${session.id}:`, error.message)
-    } else {
-      closed++
-    }
-  }
-
-  console.log(`[auto-logout] closed ${closed} of ${stale.length} stale sessions`)
-  return NextResponse.json({ closed, total: stale.length })
 }

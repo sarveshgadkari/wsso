@@ -1,7 +1,8 @@
 import { getProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
-import { todayInTimezone } from '@/lib/utils/dates'
+import { autoClockOutAt, todayInTimezone } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 import { ClockWidgetUI } from './ClockWidgetUI'
 
 export async function ClockWidget() {
@@ -9,6 +10,8 @@ export async function ClockWidget() {
   if (!profile) return null
 
   const tz       = resolveTimezone(profile.timezone)
+  await closeOpenSessionsPastMidnight(profile.id)
+
   const today    = todayInTimezone(tz)
   const supabase = await createClient()
 
@@ -38,6 +41,9 @@ export async function ClockWidget() {
   const session = openSession ?? todayLog ?? null
   const dayComplete = !!todayLog?.clock_out_at
   const canClockIn    = !todayLog
+  const capAtIso = session && !session.clock_out_at && session.log_date
+    ? autoClockOutAt(new Date(session.clock_in_at), session.log_date, tz).toISOString()
+    : null
 
   const onLeave     = !!todayLeave && !todayLeave.half_day
   const halfDayLeave = todayLeave?.half_day ? todayLeave.half_day_period : null
@@ -50,6 +56,7 @@ export async function ClockWidget() {
       canClockIn={canClockIn}
       onLeave={onLeave}
       halfDayLeave={halfDayLeave}
+      capAtIso={capAtIso}
     />
   )
 }

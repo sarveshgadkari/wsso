@@ -43,6 +43,92 @@ export function addCalendarDays(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0]
 }
 
+function partNumber(parts: Intl.DateTimeFormatPart[], type: string): number {
+  const raw = parts.find((p) => p.type === type)?.value ?? '0'
+  const n = Number(raw)
+  if (type === 'hour' && n === 24) return 0
+  return n
+}
+
+/** Offset (ms) such that utc + offset ≈ wall time in `timeZone`. */
+function tzOffsetMs(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const asUtc = Date.UTC(
+    partNumber(parts, 'year'),
+    partNumber(parts, 'month') - 1,
+    partNumber(parts, 'day'),
+    partNumber(parts, 'hour'),
+    partNumber(parts, 'minute'),
+    partNumber(parts, 'second'),
+  )
+  return asUtc - date.getTime()
+}
+
+/** UTC instant for a local civil time in an IANA timezone. */
+export function zonedLocalToUtc(dateStr: string, timeZone: string, hour = 0, minute = 0, second = 0): Date {
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  const asUtc = Date.UTC(y, mo - 1, d, hour, minute, second)
+  let date = new Date(asUtc)
+  date = new Date(asUtc - tzOffsetMs(date, timeZone))
+  date = new Date(asUtc - tzOffsetMs(date, timeZone))
+  return date
+}
+
+export const MAX_WORK_MINUTES = 24 * 60
+
+/** Local midnight (00:00) at the start of the calendar day after `dateStr`. */
+export function nextMidnightISO(dateStr: string, timeZone: string): string {
+  return zonedLocalToUtc(addCalendarDays(dateStr, 1), timeZone, 0, 0, 0).toISOString()
+}
+
+/**
+ * Clock-out instant if they forget: local midnight after their work day,
+ * never more than 24 hours after clock-in.
+ */
+export function autoClockOutAt(clockInAt: Date, logDate: string, timeZone: string): Date {
+  const midnight = zonedLocalToUtc(addCalendarDays(logDate, 1), timeZone, 0, 0, 0)
+  const max24 = new Date(clockInAt.getTime() + MAX_WORK_MINUTES * 60_000)
+  const out = midnight.getTime() <= max24.getTime() ? midnight : max24
+  if (out.getTime() <= clockInAt.getTime()) {
+    return new Date(clockInAt.getTime() + 1000)
+  }
+  return out
+}
+
+export function isPastAutoClockOut(clockInAt: Date, logDate: string, timeZone: string, now = new Date()): boolean {
+  return now.getTime() >= autoClockOutAt(clockInAt, logDate, timeZone).getTime()
+}
+
+/** Minutes worked, capped at local midnight and 24 hours. */
+export function liveWorkedMinutes(
+  log: {
+    duration_minutes: number | null
+    clock_out_at: string | null
+    clock_in_at: string
+    log_date: string | null
+  },
+  timeZone: string,
+  now = new Date(),
+): number {
+  const start = new Date(log.clock_in_at)
+  const cap = log.log_date
+    ? autoClockOutAt(start, log.log_date, timeZone)
+    : new Date(start.getTime() + MAX_WORK_MINUTES * 60_000)
+  const rawEnd = log.clock_out_at ? new Date(log.clock_out_at) : now
+  const end = new Date(Math.min(rawEnd.getTime(), cap.getTime(), now.getTime()))
+  const minutes = Math.floor((end.getTime() - start.getTime()) / 60_000)
+  return Math.min(MAX_WORK_MINUTES, Math.max(0, minutes))
+}
+
 /** Monday of the week containing `ref`, in the given timezone. */
 export function startOfWeekInTimezone(timeZone: string, ref: Date = new Date()): string {
   const today = todayInTimezone(timeZone, ref)
@@ -53,35 +139,7 @@ export function startOfWeekInTimezone(timeZone: string, ref: Date = new Date()):
 
 /** UTC instant for 23:59:59 on a calendar date in the given timezone. */
 export function endOfDayISO(dateStr: string, timeZone: string): string {
-  const [y, mo, da] = dateStr.split('-').map(Number)
-  const startMs     = Date.UTC(y, mo - 1, da - 1, 0, 0, 0)
-  const endMs       = Date.UTC(y, mo - 1, da + 2, 0, 0, 0)
-  let lastMatch: Date | null = null
-
-  for (let t = startMs; t < endMs; t += 60_000) {
-    const dt = new Date(t)
-    if (todayInTimezone(timeZone, dt) !== dateStr) continue
-
-    const parts = Object.fromEntries(
-      new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        hour:   '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).formatToParts(dt).map((p) => [p.type, p.value]),
-    )
-
-    if (parts.hour === '23' && parts.minute === '59') {
-      lastMatch = dt
-    }
-  }
-
-  if (lastMatch) {
-    // Snap to :59 seconds within that minute
-    return new Date(lastMatch.getTime() + 59_000).toISOString()
-  }
-
-  return `${dateStr}T23:59:59.000Z`
+  return zonedLocalToUtc(dateStr, timeZone, 23, 59, 59).toISOString()
 }
 
 /** @deprecated Prefer startOfWeekInTimezone(profile.timezone) for employee views. */

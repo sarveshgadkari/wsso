@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Play, Square, Timer, CheckCircle2, StickyNote, CalendarOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -23,9 +23,10 @@ interface Props {
   canClockIn:   boolean
   onLeave:      boolean
   halfDayLeave: 'morning' | 'afternoon' | null
+  capAtIso?:    string | null
 }
 
-export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLeave, halfDayLeave }: Props) {
+export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLeave, halfDayLeave, capAtIso }: Props) {
   const toast = useToast()
   const [activeSession, setActiveSession] = useState<TimeLog | null>(
     session && !session.clock_out_at ? session : null,
@@ -34,6 +35,7 @@ export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLe
   const [busy,    setBusy]    = useState(false)
   const [showNote, setShowNote] = useState(false)
   const [note,     setNote]     = useState('')
+  const autoClosedRef = useRef(false)
 
   useEffect(() => {
     setActiveSession(session && !session.clock_out_at ? session : null)
@@ -43,14 +45,25 @@ export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLe
     if (!activeSession) { setElapsed(0); return }
 
     const startMs = new Date(activeSession.clock_in_at).getTime()
-    setElapsed(Math.floor((Date.now() - startMs) / 1000))
+    const capMs = capAtIso ? Date.parse(capAtIso) : startMs + 24 * 60 * 60 * 1000
 
-    const id = setInterval(
-      () => setElapsed(Math.floor((Date.now() - startMs) / 1000)),
-      1000,
-    )
+    const tick = () => {
+      const now = Date.now()
+      setElapsed(Math.max(0, Math.floor((Math.min(now, capMs) - startMs) / 1000)))
+      if (now >= capMs && !autoClosedRef.current) {
+        autoClosedRef.current = true
+        void clockOut().then((res) => {
+          if (!res.error || res.error === 'No open clock-in session found.') {
+            setActiveSession(null)
+          }
+        })
+      }
+    }
+
+    tick()
+    const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [activeSession])
+  }, [activeSession, capAtIso])
 
   const handleClockIn = async () => {
     setBusy(true)

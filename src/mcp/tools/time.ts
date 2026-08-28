@@ -3,37 +3,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getMcpClient } from '../auth'
 import { DateSchema, PaginationSchema, runTool, UuidSchema } from '../helpers'
 import { resolveTimezone } from '@/lib/utils/timezones'
-import { endOfDayISO, todayInTimezone } from '@/lib/utils/dates'
+import { autoClockOutAt, todayInTimezone } from '@/lib/utils/dates'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/types'
-
-type DbClient = SupabaseClient<Database>
+import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 
 async function closeStaleOpenSession(
   employeeId: string,
-  tz: string,
-  supabase: DbClient,
 ): Promise<void> {
-  const today = todayInTimezone(tz)
-
-  const { data: openSession } = await supabase
-    .from('time_logs')
-    .select('id, log_date')
-    .eq('employee_id', employeeId)
-    .is('clock_out_at', null)
-    .maybeSingle()
-
-  if (!openSession || openSession.log_date === today) return
-
-  await supabaseAdmin
-    .from('time_logs')
-    .update({
-      clock_out_at: endOfDayISO(openSession.log_date, tz),
-      closed_reason: 'auto_logout',
-      auto_closed: true,
-    })
-    .eq('id', openSession.id)
+  await closeOpenSessionsPastMidnight(employeeId)
 }
 
 export function registerTimeTools(server: McpServer) {
@@ -66,7 +43,7 @@ export function registerTimeTools(server: McpServer) {
           throw new Error('You already have a time entry for today (one session per day in your timezone).')
         }
 
-        await closeStaleOpenSession(profile.id, tz, supabase)
+        await closeStaleOpenSession(profile.id)
 
         const trimmedNote = args.note?.trim() || null
         const { data, error } = await supabase
@@ -104,18 +81,30 @@ export function registerTimeTools(server: McpServer) {
         const { supabase, profile } = getMcpClient(extra)
         const { data: session } = await supabase
           .from('time_logs')
-          .select('id, clock_in_at')
+          .select('id, clock_in_at, log_date')
           .eq('employee_id', profile.id)
           .is('clock_out_at', null)
           .maybeSingle()
 
         if (!session) throw new Error('No open clock-in session found.')
 
-        // DB check requires clock_out_at > clock_in_at (strict). Guard against
-        // client/server clock skew when clocking out immediately after clock-in.
-        const clockInAt = new Date(session.clock_in_at).getTime()
+        await closeOpenSessionsPastMidnight(profile.id)
+
+        const { data: stillOpen } = await supabase
+          .from('time_logs')
+          .select('id, clock_in_at, log_date')
+          .eq('id', session.id)
+          .is('clock_out_at', null)
+          .maybeSingle()
+
+        if (!stillOpen) throw new Error('Session was auto-closed at local midnight.')
+
+        const tz = resolveTimezone(profile.timezone)
+        const cap = autoClockOutAt(new Date(stillOpen.clock_in_at), stillOpen.log_date, tz)
         let clockOutAt = Date.now()
+        const clockInAt = new Date(stillOpen.clock_in_at).getTime()
         if (clockOutAt <= clockInAt) clockOutAt = clockInAt + 1000
+        if (clockOutAt > cap.getTime()) clockOutAt = cap.getTime()
 
         const trimmedNote = args.note?.trim() || null
         const { data, error } = await supabase
@@ -126,7 +115,7 @@ export function registerTimeTools(server: McpServer) {
             clock_out_note: trimmedNote,
             clock_out_note_status: trimmedNote ? 'pending' : null,
           })
-          .eq('id', session.id)
+          .eq('id', stillOpen.id)
           .select()
           .single()
 
@@ -254,6 +243,9 @@ export function registerTimeTools(server: McpServer) {
         if (!session) throw new Error('Session not found or already closed.')
         if (clockOut <= new Date(session.clock_in_at)) {
           throw new Error('Clock-out must be after clock-in.')
+        }
+        if (clockOut.getTime() - new Date(session.clock_in_at).getTime() > 24 * 60 * 60 * 1000) {
+          throw new Error('A shift cannot be longer than 24 hours.')
         }
 
         const { data, error } = await supabaseAdmin

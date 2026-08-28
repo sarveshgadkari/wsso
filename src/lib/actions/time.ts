@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth/session'
-import { endOfDayISO, todayInTimezone } from '@/lib/utils/dates'
+import { todayInTimezone, autoClockOutAt, MAX_WORK_MINUTES } from '@/lib/utils/dates'
+import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types'
@@ -13,41 +14,6 @@ import type { Database } from '@/lib/types'
 type DbClient = SupabaseClient<Database>
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-async function employeeTimezone(employeeId: string): Promise<string> {
-  const { data } = await supabaseAdmin
-    .from('profiles')
-    .select('timezone')
-    .eq('id', employeeId)
-    .single()
-  return resolveTimezone(data?.timezone)
-}
-
-async function closeStaleOpenSession(
-  employeeId: string,
-  tz: string,
-  supabase: DbClient,
-): Promise<void> {
-  const today = todayInTimezone(tz)
-
-  const { data: openSession } = await supabase
-    .from('time_logs')
-    .select('id, log_date')
-    .eq('employee_id', employeeId)
-    .is('clock_out_at', null)
-    .maybeSingle()
-
-  if (!openSession || openSession.log_date === today) return
-
-  await supabaseAdmin
-    .from('time_logs')
-    .update({
-      clock_out_at:  endOfDayISO(openSession.log_date, tz),
-      closed_reason: 'auto_logout',
-      auto_closed:   true,
-    })
-    .eq('id', openSession.id)
-}
 
 async function getTodayLog(employeeId: string, tz: string, supabase: DbClient) {
   const today = todayInTimezone(tz)
@@ -65,40 +31,21 @@ function revalidateTimePaths() {
   revalidatePath('/time/team')
 }
 
-// ── Mechanism 2: close stale open sessions for a set of employees ─────────────
+function cappedClockOut(clockInAt: string, logDate: string, tz: string, requested = new Date()): Date {
+  const cap = autoClockOutAt(new Date(clockInAt), logDate, tz)
+  const out = requested.getTime() > cap.getTime() ? cap : requested
+  const start = new Date(clockInAt)
+  if (out.getTime() <= start.getTime()) return new Date(start.getTime() + 1000)
+  return out
+}
 
-export async function closeStaleSessionsForEmployees(
-  employeeIds: string[],
-): Promise<number> {
+export async function closeStaleSessionsForEmployees(employeeIds: string[]): Promise<number> {
   if (!employeeIds.length) return 0
-
-  const cutoff = new Date(Date.now() - 16 * 60 * 60 * 1000).toISOString()
-
-  const { data: stale } = await supabaseAdmin
-    .from('time_logs')
-    .select('id, log_date, employee_id')
-    .in('employee_id', employeeIds)
-    .is('clock_out_at', null)
-    .lt('clock_in_at', cutoff)
-
-  if (!stale?.length) return 0
-
-  await Promise.all(
-    stale.map(async (s) => {
-      const row = s as { id: string; log_date: string; employee_id: string }
-      const tz  = await employeeTimezone(row.employee_id)
-      return supabaseAdmin
-        .from('time_logs')
-        .update({
-          clock_out_at:  endOfDayISO(row.log_date, tz),
-          closed_reason: 'auto_logout',
-          auto_closed:   true,
-        })
-        .eq('id', row.id)
-    }),
-  )
-
-  return stale.length
+  let closed = 0
+  for (const id of employeeIds) {
+    closed += await closeOpenSessionsPastMidnight(id)
+  }
+  return closed
 }
 
 // ── Clock In (manual — once per local day) ──────────────────────────────────────
@@ -118,7 +65,7 @@ export async function clockIn(note?: string) {
     return { error: 'You already have a time entry for today (one session per day in your timezone).' }
   }
 
-  await closeStaleOpenSession(profile.id, tz, supabase)
+  await closeOpenSessionsPastMidnight(profile.id)
 
   const trimmedNote = note?.trim() || null
 
@@ -148,11 +95,14 @@ export async function clockIn(note?: string) {
 
 export async function clockOut(note?: string) {
   const profile  = await requireProfile()
+  const tz       = resolveTimezone(profile.timezone)
   const supabase = await createClient()
+
+  await closeOpenSessionsPastMidnight(profile.id)
 
   const { data: session } = await supabase
     .from('time_logs')
-    .select('id')
+    .select('id, clock_in_at, log_date')
     .eq('employee_id', profile.id)
     .is('clock_out_at', null)
     .maybeSingle()
@@ -160,11 +110,12 @@ export async function clockOut(note?: string) {
   if (!session) return { error: 'No open clock-in session found.' }
 
   const trimmedNote = note?.trim() || null
+  const clockOutAt = cappedClockOut(session.clock_in_at, session.log_date, tz)
 
   const { data, error } = await supabase
     .from('time_logs')
     .update({
-      clock_out_at:          new Date().toISOString(),
+      clock_out_at:          clockOutAt.toISOString(),
       closed_reason:         'manual',
       clock_out_note:        trimmedNote,
       clock_out_note_status: trimmedNote ? 'pending' : null,
@@ -252,6 +203,9 @@ export async function adminCorrectTimeLog(
   if (clockOut <= clockIn) {
     return { error: 'Clock-out must be after clock-in.' }
   }
+  if (clockOut.getTime() - clockIn.getTime() > MAX_WORK_MINUTES * 60_000) {
+    return { error: 'A shift cannot be longer than 24 hours.' }
+  }
 
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -300,6 +254,9 @@ export async function forceClockOut(
 
   const clockIn = new Date(session.clock_in_at)
   if (clockOut <= clockIn) return { error: 'Clock-out must be after clock-in.' }
+  if (clockOut.getTime() - clockIn.getTime() > MAX_WORK_MINUTES * 60_000) {
+    return { error: 'A shift cannot be longer than 24 hours.' }
+  }
 
   const { data, error } = await supabaseAdmin
     .from('time_logs')

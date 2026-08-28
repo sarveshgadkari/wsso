@@ -8,24 +8,10 @@ import {
   startOfWeekInTimezone,
   last7Days,
   dayLabel,
+  liveWorkedMinutes,
 } from '@/lib/utils/dates'
 import { resolveTimezone, timezoneShortLabel, timezoneDisplayLabel, formatTimeInTimezone } from '@/lib/utils/timezones'
 import { Globe } from 'lucide-react'
-
-function liveMinutes(l: {
-  duration_minutes: number | null
-  clock_out_at: string | null
-  clock_in_at: string
-}): number {
-  if (l.duration_minutes != null) return l.duration_minutes
-  if (!l.clock_out_at) {
-    return Math.max(
-      0,
-      Math.floor((Date.now() - new Date(l.clock_in_at).getTime()) / 60_000),
-    )
-  }
-  return 0
-}
 
 export const metadata = { title: 'My Time — WSSO' }
 
@@ -51,16 +37,16 @@ export default async function MyTimePage() {
 
   const todayMinutes = allLogs
     .filter((l) => l.log_date === today)
-    .reduce((s, l) => s + liveMinutes(l), 0)
+    .reduce((s, l) => s + liveWorkedMinutes(l, tz), 0)
 
   const weekMinutes = allLogs
     .filter((l) => l.log_date && l.log_date >= weekStart)
-    .reduce((s, l) => s + liveMinutes(l), 0)
+    .reduce((s, l) => s + liveWorkedMinutes(l, tz), 0)
 
   const minutesByDate: Record<string, number> = {}
   allLogs.forEach((l) => {
     if (l.log_date) {
-      minutesByDate[l.log_date] = (minutesByDate[l.log_date] ?? 0) + liveMinutes(l)
+      minutesByDate[l.log_date] = (minutesByDate[l.log_date] ?? 0) + liveWorkedMinutes(l, tz)
     }
   })
 
