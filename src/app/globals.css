@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -25,6 +25,45 @@
 }
 
 @layer components {
+  .mkt-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.28em] text-gold-400;
+  }
+
+  .mkt-display {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 500;
+  }
+
+  .marketing-site h1,
+  .marketing-site h2,
+  .marketing-site h3,
+  .marketing-site h4 {
+    color: inherit;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  .legal-copy h2 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.25rem;
+    color: #fff;
+    margin-top: 2rem;
+  }
+
+  .legal-copy a {
+    color: #F5C518;
+    text-decoration: underline;
+  }
+
+  .legal-copy ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+
+  .legal-copy li {
+    margin-bottom: 0.35rem;
+  }
+
   .card {
     @apply rounded-lg border bg-white shadow-card;
   }

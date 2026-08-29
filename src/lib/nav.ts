@@ -95,7 +95,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Connect AI',     href: '/connect-ai',         icon: Bot,      },
       { label: 'Notifications', href: '/notifications',      icon: Bell,     isNotifications: true },
-      { label: 'Billing',       href: '/settings/billing',   icon: CreditCard, roles: ['admin'] },
+      { label: 'Subscription', href: '/settings/billing',   icon: CreditCard, roles: ['admin'] },
       { label: 'Admin Settings',href: '/settings/hierarchy', icon: Settings, roles: ['admin'] },
     ],
   },

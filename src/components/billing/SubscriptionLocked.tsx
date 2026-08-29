@@ -18,7 +18,7 @@ export function SubscriptionLocked({ isAdmin }: { isAdmin: boolean }) {
           <Link href="/settings/billing?pay=1">
             <Button>
               <CreditCard className="h-4 w-4" />
-              Take a subscription
+              Choose a plan and subscribe
             </Button>
           </Link>
         </>

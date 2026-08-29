@@ -4,10 +4,17 @@ import { PLAN_LABELS, STATUS_LABELS, formatUsd, isStripeConfigured, orgNeedsPaym
 import { Badge } from '@/components/ui/Badge'
 import { BillingCheckout } from '@/components/billing/BillingCheckout'
 
-export const metadata = { title: 'Billing — WSSO' }
+export const metadata = { title: 'Subscription — WSSO' }
 
 interface Props {
-  searchParams: { pay?: string; success?: string; canceled?: string }
+  searchParams: {
+    pay?: string
+    success?: string
+    canceled?: string
+    choose?: string
+    plan?: string
+    interval?: string
+  }
 }
 
 export default async function BillingPage({ searchParams }: Props) {
@@ -18,17 +25,24 @@ export default async function BillingPage({ searchParams }: Props) {
     return <p className="text-sm text-neutral-500">No workspace found.</p>
   }
 
-  const { count: seatsUsed } = await supabaseAdmin
-    .from('profiles')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', org.id)
-    .eq('status', 'active')
-
-  const { data: plans } = await supabaseAdmin
-    .from('subscription_plans')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order')
+  const [{ count: seatsUsed }, { data: plans }, { data: payments }] = await Promise.all([
+    supabaseAdmin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .eq('status', 'active'),
+    supabaseAdmin
+      .from('subscription_plans')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order'),
+    supabaseAdmin
+      .from('organization_payments')
+      .select('id, amount_cents, billing_interval, status, provider, paid_at, created_at, plan_id')
+      .eq('organization_id', org.id)
+      .order('created_at', { ascending: false })
+      .limit(8),
+  ])
 
   const currentPlan = (plans ?? []).find((p) => p.id === org.plan_id)
   const used = seatsUsed ?? 0
@@ -36,14 +50,18 @@ export default async function BillingPage({ searchParams }: Props) {
   const trialLeft = org.trial_ends_at
     ? Math.ceil((new Date(org.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null
+  const choosing = searchParams.choose === '1' || due || searchParams.pay === '1'
+  const initialInterval = searchParams.interval === 'year' ? 'year' : 'month'
+  const planIds = new Set((plans ?? []).map((p) => p.id))
+  const initialPlanId = searchParams.plan && planIds.has(searchParams.plan) ? searchParams.plan : null
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold text-neutral-900">Billing</h2>
+        <h2 className="text-xl font-semibold text-neutral-900">Subscription</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          You pay for the whole company (<span className="font-medium text-neutral-700">{org.name}</span>) through Stripe.
-          Managers and employees do not see this page.
+          You pay for the whole company (<span className="font-medium text-neutral-700">{org.name}</span>).
+          Change plan, renew, or manage the card here.
         </p>
       </div>
 
@@ -54,19 +72,25 @@ export default async function BillingPage({ searchParams }: Props) {
       )}
       {searchParams.canceled === '1' && (
         <div className="rounded-md border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700">
-          Checkout canceled. You can try again when ready.
+          Checkout canceled. Choose a plan below when you are ready.
         </div>
       )}
-      {(due || searchParams.pay === '1') && (
+      {searchParams.choose === '1' && !searchParams.success && (
+        <div className="rounded-md border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
+          Workspace created. Choose a plan below and subscribe for the company.
+        </div>
+      )}
+      {due && searchParams.choose !== '1' && (
         <div className="rounded-md border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700">
           Payment is required to keep using WSSO for this company.
         </div>
       )}
 
       <div className="card p-5">
-        <dl className="grid gap-4 sm:grid-cols-2">
+        <h3 className="text-sm font-semibold text-neutral-900">Current subscription</h3>
+        <dl className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Current plan</dt>
+            <dt className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Plan</dt>
             <dd className="mt-1 text-lg font-semibold">{currentPlan?.name ?? PLAN_LABELS[org.plan]}</dd>
           </div>
           <div>
@@ -103,11 +127,19 @@ export default async function BillingPage({ searchParams }: Props) {
               </dd>
             </div>
           )}
+          {org.billing_interval && (
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Billing interval</dt>
+              <dd className="mt-1 text-sm capitalize">{org.billing_interval === 'year' ? 'Yearly' : 'Monthly'}</dd>
+            </div>
+          )}
         </dl>
       </div>
 
       <div className="card p-5">
-        <h3 className="text-sm font-semibold text-neutral-900">Subscribe or change plan</h3>
+        <h3 className="text-sm font-semibold text-neutral-900">
+          {choosing ? 'Choose a plan and subscribe' : 'Change plan or renew'}
+        </h3>
         <p className="mt-1 mb-4 text-sm text-neutral-500">
           This Stripe payment covers every user in your workspace.
         </p>
@@ -116,8 +148,32 @@ export default async function BillingPage({ searchParams }: Props) {
           currentPlanId={org.plan_id}
           stripeReady={isStripeConfigured()}
           hasStripeCustomer={Boolean(org.stripe_customer_id)}
+          initialPlanId={initialPlanId}
+          initialInterval={initialInterval}
         />
       </div>
+
+      {(payments ?? []).length > 0 && (
+        <div className="card p-5">
+          <h3 className="text-sm font-semibold text-neutral-900">Payment history</h3>
+          <ul className="mt-3 divide-y divide-neutral-100">
+            {(payments ?? []).map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div>
+                  <p className="font-medium text-neutral-800">{formatUsd(p.amount_cents)}</p>
+                  <p className="text-xs text-neutral-400">
+                    {p.provider} · {p.billing_interval === 'year' ? 'yearly' : 'monthly'} ·{' '}
+                    {new Date(p.paid_at ?? p.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <Badge variant={p.status === 'paid' ? 'success' : p.status === 'failed' ? 'danger' : 'warning'}>
+                  {p.status}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

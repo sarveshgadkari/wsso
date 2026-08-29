@@ -9,19 +9,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Primary brand — deep blue
+        // Primary brand — WSSO purple
         primary: {
-          50:  "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-          950: "#172554",
+          50:  "#f6f0fb",
+          100: "#eadcf5",
+          200: "#d4b8ea",
+          300: "#b889d9",
+          400: "#9558c0",
+          500: "#7a3aad",
+          600: "#6B2D9B",
+          700: "#512888",
+          800: "#3f1f6a",
+          900: "#2d164c",
+          950: "#1a0c2e",
+        },
+        gold: {
+          50:  "#fffbeb",
+          100: "#fef3c7",
+          400: "#FFD54A",
+          500: "#F5C518",
+          600: "#d4a80e",
+          700: "#a37e08",
         },
         // Neutral grays — cool-toned for a professional SaaS feel
         neutral: {
@@ -56,6 +64,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Playfair Display", "Georgia", "serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       borderRadius: {

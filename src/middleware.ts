@@ -1,7 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/forgot-password', '/reset-password', '/signup'])
+const PUBLIC_PATHS = new Set([
+  '/',
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+  '/signup',
+  '/terms',
+  '/privacy',
+  '/refunds',
+])
 const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/', '/api/signup', '/api/billing/webhook', '/api/cron']
 
 const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password', '/signup'])

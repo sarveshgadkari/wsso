@@ -25,7 +25,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/announcements',      'Announcements'],
   ['/notifications',      'Notifications'],
   ['/settings/hierarchy', 'Admin Settings'],
-  ['/settings/billing',   'Billing'],
+  ['/settings/billing',   'Subscription'],
   ['/platform/payments',  'Payments'],
   ['/platform/plans',     'Plans'],
   ['/platform',           'Platform'],

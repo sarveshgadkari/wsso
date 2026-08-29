@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'gold'
 type Size    = 'sm' | 'md' | 'lg'
 
 const variantClasses: Record<Variant, string> = {
@@ -11,6 +11,7 @@ const variantClasses: Record<Variant, string> = {
   secondary:   'border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 focus-visible:ring-neutral-400',
   ghost:       'text-neutral-600 hover:bg-neutral-100 focus-visible:ring-neutral-400',
   destructive: 'bg-danger-500 text-white hover:bg-danger-700 focus-visible:ring-danger-500',
+  gold:        'bg-gold-500 text-primary-950 hover:bg-gold-400 focus-visible:ring-gold-500',
 }
 
 const sizeClasses: Record<Size, string> = {

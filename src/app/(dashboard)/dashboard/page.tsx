@@ -6,6 +6,7 @@ import { AdminDashboard }    from '@/components/dashboard/AdminDashboard'
 import { ManagerDashboard }  from '@/components/dashboard/ManagerDashboard'
 import { EmployeeDashboard } from '@/components/dashboard/EmployeeDashboard'
 import { SubscriptionLocked } from '@/components/billing/SubscriptionLocked'
+import { AdminSubscriptionCard } from '@/components/billing/AdminSubscriptionCard'
 
 export const metadata = { title: 'Dashboard — WSSO' }
 
@@ -35,12 +36,17 @@ export default async function DashboardPage() {
 
       {locked ? (
         <SubscriptionLocked isAdmin={isAdmin} />
-      ) : profile.role === 'admin' || profile.role === 'director' ? (
-        <AdminDashboard />
-      ) : profile.role === 'manager' ? (
-        <ManagerDashboard />
       ) : (
-        <EmployeeDashboard />
+        <>
+          {isAdmin && <AdminSubscriptionCard />}
+          {profile.role === 'admin' || profile.role === 'director' ? (
+            <AdminDashboard />
+          ) : profile.role === 'manager' ? (
+            <ManagerDashboard />
+          ) : (
+            <EmployeeDashboard />
+          )}
+        </>
       )}
     </div>
   )

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, CreditCard, Tags } from 'lucide-react'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import { cn } from '@/lib/utils'
 
 const ITEMS = [
@@ -16,14 +17,9 @@ export function PlatformSidebar() {
 
   return (
     <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-neutral-200 px-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 shadow-sm">
-          <span className="text-xs font-bold text-white">W</span>
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-neutral-900 tracking-tight">WSSO</p>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-primary-600">Platform</p>
-        </div>
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-neutral-200 px-3">
+        <BrandLogo size={48} href="/platform" />
+        <p className="text-[10px] font-medium uppercase tracking-wider text-primary-600">Platform</p>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Platform">

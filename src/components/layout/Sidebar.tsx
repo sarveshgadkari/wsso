@@ -1,4 +1,5 @@
 import { SidebarNavLinks } from './SidebarNavLinks'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import type { UserRole } from '@/lib/types'
 
 interface SidebarProps {
@@ -13,11 +14,8 @@ export function Sidebar({ role, notifCount, subscriptionLocked = false }: Sideba
   return (
     <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
       {/* Brand */}
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-neutral-200 px-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 shadow-sm">
-          <span className="text-xs font-bold text-white">W</span>
-        </div>
-        <span className="text-sm font-semibold text-neutral-900 tracking-tight">WSSO</span>
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-neutral-200 px-3">
+        <BrandLogo size={48} href="/dashboard" />
       </div>
 
       {/* Scrollable nav */}

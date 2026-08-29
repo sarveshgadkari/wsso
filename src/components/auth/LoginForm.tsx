@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { isSignupEnabled } from '@/lib/saas/plans'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email address'),
@@ -130,15 +129,6 @@ export function LoginForm() {
       <Button type="submit" loading={isSubmitting} size="lg" className="w-full mt-1">
         Sign in
       </Button>
-
-      {isSignupEnabled() && (
-        <p className="text-center text-sm text-neutral-500">
-          New customer?{' '}
-          <Link href="/signup" className="text-primary-600 hover:underline">
-            Create a workspace
-          </Link>
-        </p>
-      )}
     </form>
   )
 }
