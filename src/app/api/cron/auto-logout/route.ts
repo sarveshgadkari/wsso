@@ -3,8 +3,9 @@ import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 
 export const runtime = 'nodejs'
 
-// Vercel Cron (vercel.json) — hourly so each employee's local midnight is caught.
-// Closes open sessions at 00:00 in that person's timezone, never more than 24 hours.
+// Vercel Cron (vercel.json) — once per day (Hobby allows only daily jobs).
+// Closes any open session that is already past local midnight in that person's timezone.
+// On Pro you may change the schedule to `0 * * * *` for hourly catch-up.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {
