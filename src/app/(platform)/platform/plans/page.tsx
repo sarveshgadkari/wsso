@@ -16,7 +16,8 @@ export default async function PlatformPlansPage() {
       <div>
         <h2 className="text-xl font-semibold text-neutral-900">Subscription plans</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          You set the prices. Workspace admins subscribe the whole company — employees do not pay.
+          These are fully dynamic. Edit, hide, or delete any plan — including the starter Trial / Starter / Growth
+          / Business / Enterprise rows. What you save here is what customers see on the landing page and at checkout.
         </p>
       </div>
       <PlansManager plans={plans ?? []} />

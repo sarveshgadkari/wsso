@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { createSubscriptionPlan, updateSubscriptionPlan } from '@/lib/actions/billing'
+import { createSubscriptionPlan, updateSubscriptionPlan, deleteSubscriptionPlan } from '@/lib/actions/billing'
 import { useToast } from '@/lib/store/toast'
 import { formatUsd } from '@/lib/saas/plans'
 import type { SubscriptionPlan } from '@/lib/types'
@@ -21,7 +21,30 @@ function centsToDollars(cents: number): string {
 
 export function PlansManager({ plans }: { plans: SubscriptionPlan[] }) {
   const router = useRouter()
+  const toast = useToast()
   const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const remove = async (plan: SubscriptionPlan) => {
+    const ok = window.confirm(
+      `Delete “${plan.name}”? It will disappear from the landing page and billing. Workspaces on this plan keep access but will have no plan attached until you assign another.`,
+    )
+    if (!ok) return
+    setDeletingId(plan.id)
+    const result = await deleteSubscriptionPlan(plan.id)
+    setDeletingId(null)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success(
+      result.workspacesDetached
+        ? `Deleted ${plan.name} (${result.workspacesDetached} workspace${result.workspacesDetached === 1 ? '' : 's'} unlinked)`
+        : `Deleted ${plan.name}`,
+    )
+    if (editing === plan.id) setEditing(null)
+    router.refresh()
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -57,14 +80,25 @@ export function PlansManager({ plans }: { plans: SubscriptionPlan[] }) {
                   {plan.trial_days > 0 ? ` · ${plan.trial_days}-day trial` : ''}
                 </p>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => setEditing(plan.id)}>Edit</Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setEditing(plan.id)}>Edit</Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => remove(plan)}
+                  loading={deletingId === plan.id}
+                  disabled={deletingId !== null}
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
           )}
         </div>
       ))}
 
       {plans.length === 0 && editing !== 'new' && (
-        <p className="text-sm text-neutral-500">No plans yet. Create Starter / Growth prices you want to sell.</p>
+        <p className="text-sm text-neutral-500">No plans yet. Create the prices you want to sell.</p>
       )}
     </div>
   )

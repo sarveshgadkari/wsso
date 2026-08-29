@@ -76,6 +76,35 @@ export async function updateSubscriptionPlan(id: string, input: z.infer<typeof p
   return { data }
 }
 
+export async function deleteSubscriptionPlan(id: string) {
+  await requireSuperAdmin()
+  if (!z.string().uuid().safeParse(id).success) return { error: 'Invalid plan' }
+
+  const { data: plan } = await supabaseAdmin
+    .from('subscription_plans')
+    .select('id, name')
+    .eq('id', id)
+    .maybeSingle()
+  if (!plan) return { error: 'Plan not found' }
+
+  const { count } = await supabaseAdmin
+    .from('organizations')
+    .select('id', { count: 'exact', head: true })
+    .eq('plan_id', id)
+
+  const { error } = await supabaseAdmin
+    .from('subscription_plans')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/platform/plans')
+  revalidatePath('/platform')
+  revalidatePath('/')
+  return { ok: true as const, name: plan.name, workspacesDetached: count ?? 0 }
+}
+
 export async function applyPlanToOrganization(orgId: string, plan: SubscriptionPlan, interval: 'month' | 'year' | null) {
   const trialDays = plan.trial_days
   const isFree = plan.monthly_price_cents === 0 && plan.yearly_price_cents === 0
