@@ -9,6 +9,8 @@ import { requestLeave } from '@/lib/actions/leave'
 interface Props {
   open:    boolean
   onClose: () => void
+  leaveTypes?: { id: string; label: string }[]
+  requireType?: boolean
 }
 
 function todayISO(): string {
@@ -16,13 +18,14 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function RequestLeaveDialog({ open, onClose }: Props) {
+export function RequestLeaveDialog({ open, onClose, leaveTypes = [], requireType = false }: Props) {
   const router = useRouter()
   const [startDate, setStartDate] = useState(todayISO())
   const [endDate,   setEndDate]   = useState(todayISO())
   const [halfDay,   setHalfDay]   = useState(false)
   const [halfDayPeriod, setHalfDayPeriod] = useState<'morning' | 'afternoon'>('morning')
   const [reason,    setReason]    = useState('')
+  const [leaveTypeId, setLeaveTypeId] = useState('')
   const [error,     setError]     = useState('')
   const [busy,      setBusy]      = useState(false)
 
@@ -34,11 +37,13 @@ export function RequestLeaveDialog({ open, onClose }: Props) {
     setHalfDay(false)
     setHalfDayPeriod('morning')
     setReason('')
+    setLeaveTypeId('')
     setError('')
   }
 
   async function handleSubmit() {
     if (!reason.trim()) { setError('Reason is required'); return }
+    if (requireType && !leaveTypeId) { setError('Select a leave type'); return }
     setBusy(true)
     setError('')
     const res = await requestLeave({
@@ -47,6 +52,7 @@ export function RequestLeaveDialog({ open, onClose }: Props) {
       half_day:        halfDay && isSingleDay,
       half_day_period: halfDay && isSingleDay ? halfDayPeriod : null,
       reason:          reason.trim(),
+      leave_type_id:   leaveTypeId || null,
     })
     setBusy(false)
     if (res.error) { setError(res.error); return }
@@ -110,6 +116,24 @@ export function RequestLeaveDialog({ open, onClose }: Props) {
             <option value="morning">Morning</option>
             <option value="afternoon">Afternoon</option>
           </select>
+        )}
+
+        {leaveTypes.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-neutral-700">
+              Type {requireType && <span className="text-danger-500">*</span>}
+            </label>
+            <select
+              value={leaveTypeId}
+              onChange={(e) => setLeaveTypeId(e.target.value)}
+              className="h-9 w-full rounded border border-neutral-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">Select…</option>
+              {leaveTypes.map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
         )}
 
         <div className="flex flex-col gap-1.5">

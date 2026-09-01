@@ -15,9 +15,11 @@ export type MyLeaveRow = LeaveRequest
 
 interface Props {
   initialRequests: MyLeaveRow[]
+  leaveTypes?: { id: string; label: string }[]
+  requireType?: boolean
 }
 
-export function MyLeaveTable({ initialRequests }: Props) {
+export function MyLeaveTable({ initialRequests, leaveTypes = [], requireType = false }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, start] = useTransition()
@@ -107,7 +109,12 @@ export function MyLeaveTable({ initialRequests }: Props) {
         toolbar={toolbar}
       />
 
-      <RequestLeaveDialog open={open} onClose={() => setOpen(false)} />
+      <RequestLeaveDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        leaveTypes={leaveTypes}
+        requireType={requireType}
+      />
     </>
   )
 }

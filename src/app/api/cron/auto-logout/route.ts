@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
+import { runDueRecurringJobs } from '@/lib/actions/ops'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,12 @@ export async function GET(request: Request) {
 
   try {
     const closed = await closeOpenSessionsPastMidnight()
-    return NextResponse.json({ closed, message: closed ? `Closed ${closed} session(s) at local midnight.` : 'No sessions past local midnight.' })
+    const recurring = await runDueRecurringJobs()
+    return NextResponse.json({
+      closed,
+      recurring,
+      message: `Closed ${closed} session(s). Created ${recurring} recurring work order(s).`,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Auto-logout failed'
     console.error('[auto-logout]', message)

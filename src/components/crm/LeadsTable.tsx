@@ -12,6 +12,8 @@ import { LEAD_STATUSES } from '@/lib/types'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { AssignLeadDialog } from './AssignLeadDialog'
 import { EditLeadDialog } from './EditLeadDialog'
+import { LeadOpsButtons } from './LeadOpsButtons'
+import type { OrgCatalogItem } from '@/lib/workspace/rows'
 
 export interface LeadRow extends Lead {
   assignments: {
@@ -23,9 +25,19 @@ export interface LeadRow extends Lead {
 
 interface Props {
   initialLeads: LeadRow[]
+  companies?: { id: string; name: string }[]
+  winReasons?: OrgCatalogItem[]
+  lostReasons?: OrgCatalogItem[]
+  defaultFollowUpDays?: number
 }
 
-export function LeadsTable({ initialLeads }: Props) {
+export function LeadsTable({
+  initialLeads,
+  companies = [],
+  winReasons = [],
+  lostReasons = [],
+  defaultFollowUpDays = 3,
+}: Props) {
   const router = useRouter()
   const [assignTarget, setAssignTarget] = useState<LeadRow | null>(null)
   const [editTarget, setEditTarget] = useState<LeadRow | null>(null)
@@ -133,15 +145,26 @@ export function LeadsTable({ initialLeads }: Props) {
       header: '',
       enableSorting: false,
       cell: ({ row: { original: l } }) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setEditTarget(l)}>
-            <Pencil className="h-3.5 w-3.5" />
-            Edit
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setAssignTarget(l)}>
-            <UserPlus className="h-3.5 w-3.5" />
-            Assign
-          </Button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setEditTarget(l)}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setAssignTarget(l)}>
+              <UserPlus className="h-3.5 w-3.5" />
+              Assign
+            </Button>
+          </div>
+          {companies.length > 0 && (
+            <LeadOpsButtons
+              lead={l}
+              companies={companies}
+              winReasons={winReasons}
+              lostReasons={lostReasons}
+              defaultFollowUpDays={defaultFollowUpDays}
+            />
+          )}
         </div>
       ),
     },

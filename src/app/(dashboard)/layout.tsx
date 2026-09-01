@@ -5,6 +5,7 @@ import { Topbar } from '@/components/layout/Topbar'
 import { ToastContainer } from '@/components/ui/Toast'
 import { redirect } from 'next/navigation'
 import { orgNeedsPayment } from '@/lib/saas/plans'
+import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile()
@@ -12,6 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const org = await getOrganization(profile.organization_id)
   const subscriptionLocked = org ? orgNeedsPayment(org) : false
+  const features = mergeWorkspaceSettings(org?.settings).features
 
   const supabase = await createClient()
   const { count } = subscriptionLocked
@@ -26,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden bg-neutral-50">
-      <Sidebar role={profile.role} notifCount={notifCount} subscriptionLocked={subscriptionLocked} />
+      <Sidebar role={profile.role} notifCount={notifCount} subscriptionLocked={subscriptionLocked} features={features} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar profile={profile} notifCount={notifCount} hideNotifications={subscriptionLocked} />

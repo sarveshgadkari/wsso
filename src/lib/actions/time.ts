@@ -10,6 +10,7 @@ import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types'
+import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
 
 type DbClient = SupabaseClient<Database>
 
@@ -29,6 +30,13 @@ function revalidateTimePaths() {
   revalidatePath('/dashboard')
   revalidatePath('/time')
   revalidatePath('/time/team')
+  revalidatePath('/approvals')
+}
+
+async function workspaceTimeRules(orgId: string | null) {
+  if (!orgId) return mergeWorkspaceSettings({}).time
+  const { data } = await supabaseAdmin.from('organizations').select('settings').eq('id', orgId).maybeSingle()
+  return mergeWorkspaceSettings(data?.settings).time
 }
 
 function cappedClockOut(clockInAt: string, logDate: string, tz: string, requested = new Date()): Date {
@@ -68,6 +76,10 @@ export async function clockIn(note?: string) {
   await closeOpenSessionsPastMidnight(profile.id)
 
   const trimmedNote = note?.trim() || null
+  const rules = await workspaceTimeRules(profile.organization_id)
+  if (rules.requireClockInNote && !trimmedNote) {
+    return { error: 'A clock-in note is required by your workspace.' }
+  }
 
   const { data, error } = await supabase
     .from('time_logs')
@@ -110,6 +122,10 @@ export async function clockOut(note?: string) {
   if (!session) return { error: 'No open clock-in session found.' }
 
   const trimmedNote = note?.trim() || null
+  const rules = await workspaceTimeRules(profile.organization_id)
+  if (rules.requireClockOutNote && !trimmedNote) {
+    return { error: 'A clock-out note is required by your workspace.' }
+  }
   const clockOutAt = cappedClockOut(session.clock_in_at, session.log_date, tz)
 
   const { data, error } = await supabase

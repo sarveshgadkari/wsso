@@ -8,8 +8,11 @@ import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
 import { TrainingDashboardCard } from '@/components/training/TrainingDashboardCard'
 import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
-import { getProfile } from '@/lib/auth/session'
+import { getProfile, getOrganization } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
+import { listWhoIsWorking } from '@/lib/actions/ops'
+import { WhoIsWorkingCard } from '@/components/ops/WhoIsWorkingCard'
 import {
   isoDate,
   todayInTimezone,
@@ -46,6 +49,8 @@ export async function ManagerDashboard() {
   const viewerTz   = resolveTimezone(viewer?.timezone)
   const today      = todayInTimezone(viewerTz)
   const sevenAgo   = daysAgo(7)
+  const org        = await getOrganization(viewer.organization_id)
+  const features   = mergeWorkspaceSettings(org?.settings).features
 
   // All queries use the regular client — RLS auto-scopes to manager's team
   const [
@@ -184,9 +189,12 @@ export async function ManagerDashboard() {
     return h > 0 ? `${h}h ${m}m` : `${m}m`
   }
 
+  const liveWorkers = features.whoIsWorking ? await listWhoIsWorking() : []
+
   return (
     <div className="flex flex-col gap-6">
-      <ClockWidget />
+      {features.time && <ClockWidget />}
+      {features.whoIsWorking && <WhoIsWorkingCard workers={liveWorkers} />}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">

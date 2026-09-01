@@ -1,6 +1,7 @@
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { MyLeaveTable, type MyLeaveRow } from '@/components/leave/MyLeaveTable'
+import { listCatalog, getWorkspaceSettings } from '@/lib/actions/workspace'
 
 export const metadata = { title: 'My Leave — WSSO' }
 
@@ -8,11 +9,15 @@ export default async function LeavePage() {
   const profile  = await requireProfile()
   const supabase = await createClient()
 
-  const { data: requests } = await supabase
-    .from('leave_requests')
-    .select('*')
-    .eq('employee_id', profile.id)
-    .order('created_at', { ascending: false })
+  const [requestsRes, types, settings] = await Promise.all([
+    supabase
+      .from('leave_requests')
+      .select('*')
+      .eq('employee_id', profile.id)
+      .order('created_at', { ascending: false }),
+    listCatalog('leave_type', true),
+    getWorkspaceSettings(),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,7 +28,11 @@ export default async function LeavePage() {
         </p>
       </div>
 
-      <MyLeaveTable initialRequests={(requests ?? []) as MyLeaveRow[]} />
+      <MyLeaveTable
+        initialRequests={(requestsRes.data ?? []) as MyLeaveRow[]}
+        leaveTypes={types.map((t) => ({ id: t.id, label: t.label }))}
+        requireType={settings.leave.requireType}
+      />
     </div>
   )
 }

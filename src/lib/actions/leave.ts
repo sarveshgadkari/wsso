@@ -19,6 +19,7 @@ const requestSchema = z
     half_day:        z.boolean(),
     half_day_period: z.enum(['morning', 'afternoon']).optional().nullable(),
     reason:          z.string().min(1, 'Reason is required'),
+    leave_type_id:   z.string().uuid().optional().nullable(),
   })
   .refine(d => d.end_date >= d.start_date, {
     message: 'End date must be on or after the start date',
@@ -47,6 +48,7 @@ export async function requestLeave(input: z.infer<typeof requestSchema>) {
       half_day:        parsed.data.half_day,
       half_day_period: parsed.data.half_day ? parsed.data.half_day_period : null,
       reason:          parsed.data.reason,
+      leave_type_id:   parsed.data.leave_type_id ?? null,
     })
     .select()
     .single()

@@ -5,21 +5,26 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { NAV_SECTIONS } from '@/lib/nav'
 import type { UserRole } from '@/lib/types'
+import type { WorkspaceFeatures } from '@/lib/workspace/settings'
+import { DEFAULT_WORKSPACE_FEATURES } from '@/lib/workspace/settings'
 
 interface SidebarNavLinksProps {
   role: UserRole
   notifCount: number
   subscriptionLocked?: boolean
+  features?: WorkspaceFeatures
 }
 
-export function SidebarNavLinks({ role, notifCount, subscriptionLocked = false }: SidebarNavLinksProps) {
+export function SidebarNavLinks({ role, notifCount, subscriptionLocked = false, features }: SidebarNavLinksProps) {
   const pathname = usePathname()
+  const flags = features ?? DEFAULT_WORKSPACE_FEATURES
 
   return (
     <nav className="flex flex-col gap-1 px-3" aria-label="Main navigation">
       {NAV_SECTIONS.map((section, si) => {
         const visible = section.items.filter((item) => {
           if (item.roles && !item.roles.includes(role)) return false
+          if (item.feature && !flags[item.feature]) return false
           if (subscriptionLocked) {
             return item.href === '/dashboard' || item.href === '/settings/billing'
           }

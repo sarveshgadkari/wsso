@@ -24,9 +24,11 @@ interface Props {
   onLeave:      boolean
   halfDayLeave: 'morning' | 'afternoon' | null
   capAtIso?:    string | null
+  requireClockInNote?: boolean
+  requireClockOutNote?: boolean
 }
 
-export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLeave, halfDayLeave, capAtIso }: Props) {
+export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLeave, halfDayLeave, capAtIso, requireClockInNote, requireClockOutNote }: Props) {
   const toast = useToast()
   const [activeSession, setActiveSession] = useState<TimeLog | null>(
     session && !session.clock_out_at ? session : null,
@@ -66,6 +68,11 @@ export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLe
   }, [activeSession, capAtIso])
 
   const handleClockIn = async () => {
+    if (requireClockInNote && !note.trim()) {
+      setShowNote(true)
+      toast.error('Add a clock-in note')
+      return
+    }
     setBusy(true)
     const res = await clockIn(note)
     setBusy(false)
@@ -77,6 +84,11 @@ export function ClockWidgetUI({ session, timeZone, dayComplete, canClockIn, onLe
   }
 
   const handleClockOut = async () => {
+    if (requireClockOutNote && !note.trim()) {
+      setShowNote(true)
+      toast.error('Add a clock-out note')
+      return
+    }
     setBusy(true)
     const res = await clockOut(note)
     setBusy(false)

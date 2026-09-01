@@ -4,6 +4,7 @@ import { autoClockOutAt, todayInTimezone } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import { closeOpenSessionsPastMidnight } from '@/lib/time/auto-close'
 import { ClockWidgetUI } from './ClockWidgetUI'
+import { getWorkspaceSettings } from '@/lib/actions/workspace'
 
 export async function ClockWidget() {
   const profile = await getProfile()
@@ -11,6 +12,7 @@ export async function ClockWidget() {
 
   const tz       = resolveTimezone(profile.timezone)
   await closeOpenSessionsPastMidnight(profile.id)
+  const settings = await getWorkspaceSettings()
 
   const today    = todayInTimezone(tz)
   const supabase = await createClient()
@@ -57,6 +59,8 @@ export async function ClockWidget() {
       onLeave={onLeave}
       halfDayLeave={halfDayLeave}
       capAtIso={capAtIso}
+      requireClockInNote={settings.time.requireClockInNote}
+      requireClockOutNote={settings.time.requireClockOutNote}
     />
   )
 }

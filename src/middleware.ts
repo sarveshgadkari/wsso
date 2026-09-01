@@ -16,7 +16,7 @@ const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/', '/api/signup', '
 const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password', '/signup'])
 
 const ADMIN_PREFIXES = ['/api/admin', '/admin', '/companies', '/settings', '/crm']
-const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports']
+const MANAGER_ADMIN_PREFIXES = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports', '/approvals', '/compliance']
 const PLATFORM_PREFIXES = ['/platform', '/api/platform']
 
 function isPublic(pathname: string): boolean {

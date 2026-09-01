@@ -23,8 +23,11 @@ import {
   GraduationCap,
   Bot,
   CreditCard,
+  Inbox,
+  ShieldCheck,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
+import type { WorkspaceFeatureKey } from '@/lib/workspace/settings'
 
 export interface NavItem {
   label: string
@@ -34,6 +37,8 @@ export interface NavItem {
   roles?: UserRole[]
   /** Mark true to render the notifications badge */
   isNotifications?: boolean
+  /** Hide when this workspace feature is turned off */
+  feature?: WorkspaceFeatureKey
 }
 
 export interface NavSection {
@@ -50,10 +55,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Work',
     items: [
-      { label: 'My Work',      href: '/my-work', icon: Table2 },
+      { label: 'My Work',      href: '/my-work', icon: Table2, feature: 'myWork' },
       { label: 'TACTICs',      href: '/tactic-documents', icon: FileText },
       { label: 'Work Orders',  href: '/tactics', icon: ClipboardList },
-      { label: 'Kanban Board', href: '/kanban',  icon: Kanban },
+      { label: 'Kanban Board', href: '/kanban',  icon: Kanban, feature: 'kanban' },
     ],
   },
   {
@@ -68,35 +73,37 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'CRM',
     items: [
-      { label: 'CRM',       href: '/crm',      icon: Handshake, roles: ['admin'] },
-      { label: 'My Leads',  href: '/my-leads', icon: UserCheck },
+      { label: 'CRM',       href: '/crm',      icon: Handshake, roles: ['admin'], feature: 'crm' },
+      { label: 'My Leads',  href: '/my-leads', icon: UserCheck, feature: 'crm' },
     ],
   },
   {
     title: 'Time',
     items: [
-      { label: 'My Time',   href: '/time',      icon: Clock },
-      { label: 'Team Time', href: '/time/team', icon: CalendarClock, roles: ['admin', 'manager'] },
-      { label: 'My Leave',   href: '/leave',      icon: CalendarOff },
-      { label: 'Team Leave', href: '/leave/team', icon: CalendarCheck, roles: ['admin', 'manager'] },
+      { label: 'My Time',   href: '/time',      icon: Clock, feature: 'time' },
+      { label: 'Team Time', href: '/time/team', icon: CalendarClock, roles: ['admin', 'manager'], feature: 'time' },
+      { label: 'My Leave',   href: '/leave',      icon: CalendarOff, feature: 'leave' },
+      { label: 'Team Leave', href: '/leave/team', icon: CalendarCheck, roles: ['admin', 'manager'], feature: 'leave' },
+      { label: 'Approvals', href: '/approvals', icon: Inbox, roles: ['admin', 'manager'], feature: 'approvals' },
     ],
   },
   {
     title: 'Content',
     items: [
-      { label: 'Training',       href: '/training',       icon: GraduationCap },
-      { label: 'Documents',      href: '/documents',      icon: FileText },
-      { label: 'Announcements',  href: '/announcements',  icon: Megaphone },
+      { label: 'Training',       href: '/training',       icon: GraduationCap, feature: 'training' },
+      { label: 'Documents',      href: '/documents',      icon: FileText, feature: 'documents' },
+      { label: 'Announcements',  href: '/announcements',  icon: Megaphone, feature: 'announcements' },
+      { label: 'Licenses',       href: '/compliance',     icon: ShieldCheck, roles: ['admin', 'manager'], feature: 'compliance' },
       { label: 'Reports',        href: '/reports',        icon: BarChart3,  roles: ['admin', 'manager'] },
       { label: 'Activity Log',   href: '/activity-log',   icon: Activity },
     ],
   },
   {
     items: [
-      { label: 'Connect AI',     href: '/connect-ai',         icon: Bot,      },
+      { label: 'Connect AI',     href: '/connect-ai',         icon: Bot, feature: 'connectAi' },
       { label: 'Notifications', href: '/notifications',      icon: Bell,     isNotifications: true },
       { label: 'Subscription', href: '/settings/billing',   icon: CreditCard, roles: ['admin'] },
-      { label: 'Admin Settings',href: '/settings/hierarchy', icon: Settings, roles: ['admin'] },
+      { label: 'Workspace',    href: '/settings/workspace', icon: Settings, roles: ['admin'] },
     ],
   },
 ]
@@ -123,10 +130,12 @@ export const DASHBOARD_PATHS = [
   '/my-leads',
   '/leave',
   '/connect-ai',
+  '/approvals',
+  '/compliance',
 ]
 
 /** Paths accessible only to admin/manager in the middleware */
-export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports']
+export const MANAGER_ADMIN_PATHS = ['/employees', '/time/team', '/leave/team', '/projects', '/clients', '/reports', '/approvals', '/compliance']
 
 /** Paths accessible only to admin in the middleware */
 export const ADMIN_ONLY_PATHS = ['/companies', '/settings', '/api/admin', '/crm']

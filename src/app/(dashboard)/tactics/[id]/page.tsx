@@ -1,11 +1,14 @@
 import { notFound } from 'next/navigation'
-import { requireProfile } from '@/lib/auth/session'
+import { requireProfile, getOrganization } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { TacticDetail } from '@/components/tactics/TacticDetail'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 import type { ActivityLogRow } from '@/components/tactics/ActivityTimeline'
 import { enrichTacticRows, enrichActivityLogActors } from '@/lib/tactics/enrich-profiles'
 import { getDocuments } from '@/lib/actions/documents'
+import { listChecklistTemplates } from '@/lib/actions/workspace'
+import { getTacticJobCost, listTacticChecklist } from '@/lib/actions/ops'
+import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
 
 interface Props {
   params: { id: string }
@@ -64,6 +67,13 @@ export default async function TacticDetailPage({ params }: Props) {
     (logsRes.data ?? []) as unknown as ActivityLogRow[],
   )
   const documents = await getDocuments({ tactic_code: tactic.code })
+  const org = await getOrganization(profile.organization_id)
+  const features = mergeWorkspaceSettings(org?.settings).features
+  const [checklistItems, checklistTemplates, jobCost] = await Promise.all([
+    features.checklists ? listTacticChecklist(tactic.id) : Promise.resolve([]),
+    features.checklists ? listChecklistTemplates() : Promise.resolve([]),
+    features.jobCosting ? getTacticJobCost(tactic.id) : Promise.resolve(null),
+  ])
   const employees = (employeesRes.data ?? []) as { id: string; full_name: string; employee_code: string }[]
   const projects  = (projectsRes.data  ?? []) as { id: string; name: string; code: string }[]
 
@@ -87,6 +97,9 @@ export default async function TacticDetailPage({ params }: Props) {
       canEdit={canEdit}
       canDelete={canDelete}
       currentUserId={profile.id}
+      checklistItems={checklistItems}
+      checklistTemplates={checklistTemplates.filter((t) => t.is_active)}
+      jobCost={jobCost}
     />
   )
 }

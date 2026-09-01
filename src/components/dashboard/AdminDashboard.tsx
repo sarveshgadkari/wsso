@@ -15,8 +15,12 @@ import { CrmDashboardCard } from '@/components/crm/CrmLeadActions'
 import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
 import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel, todayInTimezone } from '@/lib/utils/dates'
-import { getProfile } from '@/lib/auth/session'
+import { getProfile, getOrganization } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
+import { listWhoIsWorking, getOverdueFollowUpCount, getExpiringComplianceCount } from '@/lib/actions/ops'
+import { WhoIsWorkingCard } from '@/components/ops/WhoIsWorkingCard'
+import { OpsTodayStrip } from '@/components/ops/OpsTodayStrip'
 interface OverdueTacticRow {
   id:          string
   assigned_to: string
@@ -32,6 +36,8 @@ export async function AdminDashboard() {
   const today     = todayInTimezone(tz)
   const thirtyAgo = daysAgo(30)
   const sevenAgo  = daysAgo(7)
+  const org       = await getOrganization(viewer.organization_id)
+  const features  = mergeWorkspaceSettings(org?.settings).features
 
   const pendingTacticCount = await countPendingTacticDocuments(viewer)
 
@@ -45,6 +51,7 @@ export async function AdminDashboard() {
     completionLogsRes,
     hoursLogsRes,
     activeEmployeeIdsRes,
+    leavePendingRes,
   ] = await Promise.all([
     supabase.from('companies').select('*', { count: 'exact', head: true }),
     supabase.from('profiles')
@@ -80,6 +87,7 @@ export async function AdminDashboard() {
       .not('duration_minutes', 'is', null),
     // Active employee IDs — used for Mechanism 2 stale session check
     supabase.from('profiles').select('id').eq('status', 'active'),
+    supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
 
   // Mechanism 2: close any stale open sessions (>16 h) for all active employees
@@ -137,9 +145,28 @@ export async function AdminDashboard() {
     hours: Math.round(((hoursByDate[date] ?? 0) / 60) * 10) / 10,
   }))
 
+  const [liveWorkers, expiringCount, followUpCount] = await Promise.all([
+    features.whoIsWorking ? listWhoIsWorking() : Promise.resolve([]),
+    features.compliance ? getExpiringComplianceCount() : Promise.resolve(0),
+    features.followUps && viewer.role === 'admin' ? getOverdueFollowUpCount() : Promise.resolve(0),
+  ])
+
   return (
     <div className="flex flex-col gap-6">
-      <ClockWidget />
+      {features.time && <ClockWidget />}
+
+      {(features.approvals || features.compliance || features.crm) && (
+        <OpsTodayStrip
+          pendingApprovals={leavePendingRes.count ?? 0}
+          expiringCompliance={expiringCount}
+          overdueFollowUps={followUpCount}
+          showCrm={features.crm && features.followUps && viewer.role === 'admin'}
+          showCompliance={features.compliance && ['admin', 'manager'].includes(viewer.role)}
+          showApprovals={features.approvals && ['admin', 'manager'].includes(viewer.role)}
+        />
+      )}
+
+      {features.whoIsWorking && <WhoIsWorkingCard workers={liveWorkers} />}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
@@ -164,7 +191,7 @@ export async function AdminDashboard() {
         />
       </div>
 
-      {viewer.role === 'admin' && <CrmDashboardCard newCount={newLeadsCount} />}
+      {viewer.role === 'admin' && features.crm && <CrmDashboardCard newCount={newLeadsCount} />}
 
       <MyWorkDashboardCard />
 

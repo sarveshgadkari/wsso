@@ -10,6 +10,9 @@ import {
   todayInTimezone,
 } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { PayrollExportButton } from '@/components/ops/PayrollExportButton'
+import { WhoIsWorkingCard } from '@/components/ops/WhoIsWorkingCard'
+import { listWhoIsWorking } from '@/lib/actions/ops'
 
 export const metadata = { title: 'Team Time — WSSO' }
 
@@ -125,17 +128,28 @@ export default async function TeamTimePage() {
     openSession:   agg[e.id]?.openSession ?? null,
   }))
 
+  const liveWorkers = await listWhoIsWorking()
+  const monthStartForExport = startOfMonthInTimezone(resolveTimezone(profile.timezone))
+  const todayForExport = todayInTimezone(resolveTimezone(profile.timezone))
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold text-neutral-900">Team Time</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          {profile.role === 'manager'
-            ? 'Attendance overview for your team members this month.'
-            : 'Attendance overview across all active employees this month.'}
-          {' '}Today/week totals use each employee&apos;s timezone.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-neutral-900">Team Time</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            {profile.role === 'manager'
+              ? 'Attendance overview for your team members this month.'
+              : 'Attendance overview across all active employees this month.'}
+            {' '}Today/week totals use each employee&apos;s timezone. Overtime in the CSV uses your workspace weekly cap.
+          </p>
+        </div>
+        {profile.role === 'admin' && (
+          <PayrollExportButton defaultFrom={monthStartForExport} defaultTo={todayForExport} />
+        )}
       </div>
+
+      <WhoIsWorkingCard workers={liveWorkers} />
 
       <PendingNotesPanel notes={pendingNotes} />
 

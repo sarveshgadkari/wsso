@@ -31,6 +31,7 @@ export type Database = {
           stripe_subscription_id: string | null
           billing_interval: 'month' | 'year' | null
           current_period_end: string | null
+          settings: Record<string, unknown>
           created_at: string
           updated_at: string
         }
@@ -50,6 +51,7 @@ export type Database = {
           stripe_subscription_id?: string | null
           billing_interval?: 'month' | 'year' | null
           current_period_end?: string | null
+          settings?: Record<string, unknown>
           created_at?: string
           updated_at?: string
         }
@@ -69,6 +71,7 @@ export type Database = {
           stripe_subscription_id?: string | null
           billing_interval?: 'month' | 'year' | null
           current_period_end?: string | null
+          settings?: Record<string, unknown>
           updated_at?: string
         }
         Relationships: [
@@ -197,6 +200,9 @@ export type Database = {
           team_id: string | null
           department: string | null
           timezone: string
+          hourly_rate_cents: number
+          location_id: string | null
+          backup_approver_id: string | null
           status: Database['public']['Enums']['profile_status']
           created_at: string
           updated_at: string
@@ -213,6 +219,9 @@ export type Database = {
           team_id?: string | null
           department?: string | null
           timezone?: string
+          hourly_rate_cents?: number
+          location_id?: string | null
+          backup_approver_id?: string | null
           status?: Database['public']['Enums']['profile_status']
           created_at?: string
           updated_at?: string
@@ -229,6 +238,9 @@ export type Database = {
           team_id?: string | null
           department?: string | null
           timezone?: string
+          hourly_rate_cents?: number
+          location_id?: string | null
+          backup_approver_id?: string | null
           status?: Database['public']['Enums']['profile_status']
           updated_at?: string
         }
@@ -562,6 +574,11 @@ export type Database = {
           status: Database['public']['Enums']['tactic_status']
           due_date: string | null        // ISO date string
           estimated_hours: number | null
+          checklist_template_id: string | null
+          work_order_type_id: string | null
+          sla_hours: number | null
+          billable: boolean
+          location_id: string | null
           created_at: string
           updated_at: string
         }
@@ -580,6 +597,11 @@ export type Database = {
           status?: Database['public']['Enums']['tactic_status']
           due_date?: string | null
           estimated_hours?: number | null
+          checklist_template_id?: string | null
+          work_order_type_id?: string | null
+          sla_hours?: number | null
+          billable?: boolean
+          location_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -597,6 +619,11 @@ export type Database = {
           status?: Database['public']['Enums']['tactic_status']
           due_date?: string | null
           estimated_hours?: number | null
+          checklist_template_id?: string | null
+          work_order_type_id?: string | null
+          sla_hours?: number | null
+          billable?: boolean
+          location_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -733,6 +760,7 @@ export type Database = {
           clock_in_note_status: Database['public']['Enums']['note_review_status'] | null
           clock_out_note: string | null
           clock_out_note_status: Database['public']['Enums']['note_review_status'] | null
+          break_minutes: number
         }
         Insert: {
           id?: string
@@ -748,6 +776,7 @@ export type Database = {
           clock_in_note_status?: Database['public']['Enums']['note_review_status'] | null
           clock_out_note?: string | null
           clock_out_note_status?: Database['public']['Enums']['note_review_status'] | null
+          break_minutes?: number
         }
         Update: {
           id?: string
@@ -786,6 +815,7 @@ export type Database = {
           reviewed_by:     string | null
           reviewed_at:     string | null
           review_note:     string | null
+          leave_type_id:   string | null
           created_at:      string
         }
         Insert: {
@@ -796,6 +826,7 @@ export type Database = {
           half_day?:        boolean
           half_day_period?: Database['public']['Enums']['half_day_period'] | null
           reason:           string
+          leave_type_id?:   string | null
           status?:          Database['public']['Enums']['leave_status']
           reviewed_by?:     string | null
           reviewed_at?:     string | null
@@ -1175,7 +1206,12 @@ export type Database = {
           message:      string
           source:       string | null
           page_path:    string | null
-          status:       Database['public']['Enums']['lead_status']
+          status: Database['public']['Enums']['lead_status']
+          converted_client_id: string | null
+          outcome_reason: string | null
+          next_follow_up_at: string | null
+          estimated_value_cents: number
+          organization_id?: string
           created_at:   string
         }
         Insert: {
@@ -1191,6 +1227,10 @@ export type Database = {
           source?:       string | null
           page_path?:    string | null
           status?:       Database['public']['Enums']['lead_status']
+          converted_client_id?: string | null
+          outcome_reason?: string | null
+          next_follow_up_at?: string | null
+          estimated_value_cents?: number
           created_at?:   string
         }
         Update: {
@@ -1203,6 +1243,10 @@ export type Database = {
           source?:       string | null
           page_path?:    string | null
           status?:       Database['public']['Enums']['lead_status']
+          converted_client_id?: string | null
+          outcome_reason?: string | null
+          next_follow_up_at?: string | null
+          estimated_value_cents?: number
         }
         Relationships: []
       }
@@ -1266,6 +1310,7 @@ export type Database = {
           pass_percent: number
           is_published: boolean
           created_by: string
+          certificate_valid_days: number | null
           created_at: string
           updated_at: string
         }

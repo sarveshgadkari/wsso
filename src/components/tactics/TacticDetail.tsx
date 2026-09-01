@@ -17,6 +17,10 @@ import { WorkOrderWorkPanel } from './WorkOrderWorkPanel'
 import { STATUS_LABEL, STATUS_VARIANT, PRIORITY_LABEL, PRIORITY_VARIANT } from '@/lib/tactics-utils'
 import type { DocumentMeta } from '@/lib/actions/documents'
 import type { TacticStatus, TacticPriority, UserRole } from '@/lib/types'
+import { TacticChecklist } from './TacticChecklist'
+import { JobCostingCard } from './JobCostingCard'
+import type { ChecklistTemplate, TacticChecklistItem } from '@/lib/workspace/rows'
+import type { JobCostSummary } from '@/lib/actions/ops'
 
 interface Props {
   tactic:        TacticRow
@@ -28,6 +32,9 @@ interface Props {
   canEdit:       boolean
   canDelete:     boolean
   currentUserId: string
+  checklistItems?: TacticChecklistItem[]
+  checklistTemplates?: ChecklistTemplate[]
+  jobCost?: JobCostSummary | null
 }
 
 function MetaItem({
@@ -51,7 +58,10 @@ function MetaItem({
 }
 
 export function TacticDetail({
-  tactic: initialTactic, logs, documents, employees, projects, role, canEdit, canDelete, currentUserId,
+  tactic: initialTactic, logs, documents, employees, projects, role, canEdit, canDelete,   currentUserId,
+  checklistItems = [],
+  checklistTemplates = [],
+  jobCost = null,
 }: Props) {
   const router = useRouter()
   const toast  = useToast()
@@ -239,6 +249,17 @@ export function TacticDetail({
           </MetaItem>
         </div>
       </div>
+
+      {(checklistTemplates.length > 0 || checklistItems.length > 0) && (
+        <TacticChecklist
+          tacticId={tactic.id}
+          items={checklistItems}
+          templates={checklistTemplates}
+          canApply={canEdit}
+        />
+      )}
+
+      {jobCost && <JobCostingCard cost={jobCost} />}
 
       {/* Work updates, attachments, links */}
       <WorkOrderWorkPanel
