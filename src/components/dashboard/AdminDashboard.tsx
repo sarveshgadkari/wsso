@@ -11,6 +11,7 @@ import { StatCard } from './StatCard'
 import { MyWorkDashboardCard } from '@/components/my-work/MyWorkDashboardCard'
 import { AnnouncementsDashboardCard } from '@/components/announcements/AnnouncementsDashboardCard'
 import { TrainingDashboardCard } from '@/components/training/TrainingDashboardCard'
+import { CrmDashboardCard } from '@/components/crm/CrmLeadActions'
 import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { TacticCompletionChart, type CompletionBar } from './TacticCompletionChart'
 import { isoDate, last7Days, last30Days, daysAgo, dayLabel, monthDayLabel, todayInTimezone } from '@/lib/utils/dates'
@@ -92,6 +93,15 @@ export async function AdminDashboard() {
   const overdueTactics = (overdueTacticsRes.data ?? []) as unknown as OverdueTacticRow[]
   const overdueCount   = overdueTactics.length
 
+  let newLeadsCount = 0
+  if (viewer.role === 'admin') {
+    const { count } = await supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'new')
+    newLeadsCount = count ?? 0
+  }
+
   // Group overdue by assignee and take top 7
   const overduMap: Record<string, { id: string; full_name: string; employee_code: string; count: number }> = {}
   overdueTactics.forEach(t => {
@@ -153,6 +163,8 @@ export async function AdminDashboard() {
           icon={FileText}
         />
       </div>
+
+      {viewer.role === 'admin' && <CrmDashboardCard newCount={newLeadsCount} />}
 
       <MyWorkDashboardCard />
 
