@@ -558,7 +558,7 @@ export type JobCostSummary = {
 }
 
 export async function getTacticJobCost(tacticId: string): Promise<JobCostSummary | null> {
-  const profile = await requireProfile()
+  await requireProfile()
   const supabase = await createClient()
   const { data: tactic } = await supabase
     .from('tactics')
