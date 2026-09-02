@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { orgNeedsPayment } from '@/lib/saas/plans'
 
 const PUBLIC_PATHS = new Set([
   '/',
@@ -120,11 +121,7 @@ export async function middleware(request: NextRequest) {
         .eq('id', profile.organization_id)
         .single()
 
-      const paymentDue =
-        org &&
-        (org.status === 'past_due' ||
-          (org.status === 'trial' && org.trial_ends_at && new Date(org.trial_ends_at) < new Date()) ||
-          (org.status === 'active' && org.current_period_end && new Date(org.current_period_end) < new Date()))
+      const paymentDue = org ? orgNeedsPayment(org) : false
 
       const allowedWhileLocked =
         pathname === '/dashboard' ||

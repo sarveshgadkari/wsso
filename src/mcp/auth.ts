@@ -6,6 +6,21 @@ import {
   resolveMcpLongLivedToken,
 } from '@/lib/mcp/long-lived-token'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { orgHardBlocked, orgNeedsPayment } from '@/lib/saas/plans'
+
+async function workspaceAllowsMcp(profile: Profile): Promise<boolean> {
+  if (profile.role === 'super_admin') return true
+  if (!profile.organization_id) return false
+  const { data: org } = await supabaseAdmin
+    .from('organizations')
+    .select('status, trial_ends_at, current_period_end')
+    .eq('id', profile.organization_id)
+    .maybeSingle()
+  if (!org) return false
+  if (orgHardBlocked(org)) return false
+  if (orgNeedsPayment(org)) return false
+  return true
+}
 
 export type McpAuthExtra = {
   profile: Profile
@@ -56,6 +71,7 @@ export async function verifyMcpToken(
 
       if (profileError || !profile) return undefined
       if (profile.status === 'inactive') return undefined
+      if (!(await workspaceAllowsMcp(profile))) return undefined
 
       return {
         token: resolved.supabaseJwt,
@@ -84,6 +100,7 @@ export async function verifyMcpToken(
 
   if (profileError || !profile) return undefined
   if (profile.status === 'inactive') return undefined
+  if (!(await workspaceAllowsMcp(profile))) return undefined
 
   return {
     token: bearerToken,

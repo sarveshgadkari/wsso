@@ -256,9 +256,6 @@ export async function startCheckout(planId: string, interval: 'month' | 'year') 
     },
     subscription_data: {
       metadata: { organization_id: org.id, plan_id: plan.id, interval },
-      ...(plan.trial_days > 0 && (org.status === 'trial' || org.status === 'past_due')
-        ? { trial_period_days: plan.trial_days }
-        : {}),
     },
     line_items: [
       {

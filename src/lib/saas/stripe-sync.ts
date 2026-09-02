@@ -14,6 +14,8 @@ export async function fulfillCheckoutSession(sessionId: string) {
   const session = await stripe.checkout.sessions.retrieve(sessionId, {
     expand: ['subscription'],
   })
+  if (session.status !== 'complete' && session.payment_status !== 'paid') return
+
   const orgId = session.metadata?.organization_id || session.client_reference_id || undefined
   const planId = session.metadata?.plan_id
   const interval = (session.metadata?.interval === 'year' ? 'year' : 'month') as 'month' | 'year'
@@ -70,7 +72,7 @@ export async function fulfillCheckoutSession(sessionId: string) {
 
 /**
  * Stripe redirects to ?success=1 before (or even if) the webhook runs.
- * If the workspace is still past_due, finish the latest pending Checkout session.
+ * If the workspace is still past_due, finish any pending Checkout session that Stripe already marked paid.
  */
 export async function recoverPaidCheckout(organizationId: string): Promise<boolean> {
   const { data: pending } = await supabaseAdmin
@@ -81,26 +83,25 @@ export async function recoverPaidCheckout(organizationId: string): Promise<boole
     .eq('provider', 'stripe')
     .not('stripe_checkout_session_id', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const sessionId = pending?.stripe_checkout_session_id
-  if (!sessionId) return false
+    .limit(8)
 
   const stripe = getStripe()
-  if (!stripe) return false
+  if (!stripe || !pending?.length) return false
 
-  try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
-    if (session.status !== 'complete' && session.payment_status !== 'paid') {
-      return false
+  for (const row of pending) {
+    const sessionId = row.stripe_checkout_session_id
+    if (!sessionId) continue
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId)
+      if (session.status !== 'complete' && session.payment_status !== 'paid') continue
+    } catch {
+      continue
     }
-  } catch {
-    return false
+    await fulfillCheckoutSession(sessionId)
+    return true
   }
 
-  await fulfillCheckoutSession(sessionId)
-  return true
+  return false
 }
 
 export async function applyStripeSubscriptionEvent(sub: {
@@ -139,9 +140,14 @@ export async function applyStripeSubscriptionEvent(sub: {
   let orgStatus: 'active' | 'past_due' | 'cancelled' | 'trial' = 'past_due'
   let subscriptionId: string | null = sub.id
 
+  if (stripeStatus === 'incomplete') {
+    // Checkout often emits this before the first invoice settles. Do not relock a paid workspace.
+    return
+  }
+
   if (stripeStatus === 'active' || stripeStatus === 'trialing') {
     orgStatus = stripeStatus === 'trialing' ? 'trial' : 'active'
-  } else if (stripeStatus === 'past_due' || stripeStatus === 'unpaid' || stripeStatus === 'incomplete') {
+  } else if (stripeStatus === 'past_due' || stripeStatus === 'unpaid') {
     orgStatus = 'past_due'
   } else if (stripeStatus === 'canceled' || stripeStatus === 'incomplete_expired') {
     orgStatus = stillCovered ? 'active' : 'past_due'
