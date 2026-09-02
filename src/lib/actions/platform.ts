@@ -213,7 +213,7 @@ export async function inviteOrgAdmin(orgId: string, fullName: string, email: str
     return { error: profileError?.message ?? 'Failed to create profile' }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.vercel.app'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.tlbisbig.world'
   const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
     type: 'recovery',
     email,

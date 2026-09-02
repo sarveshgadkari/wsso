@@ -68,6 +68,41 @@ export async function fulfillCheckoutSession(sessionId: string) {
   }
 }
 
+/**
+ * Stripe redirects to ?success=1 before (or even if) the webhook runs.
+ * If the workspace is still past_due, finish the latest pending Checkout session.
+ */
+export async function recoverPaidCheckout(organizationId: string): Promise<boolean> {
+  const { data: pending } = await supabaseAdmin
+    .from('organization_payments')
+    .select('stripe_checkout_session_id')
+    .eq('organization_id', organizationId)
+    .eq('status', 'pending')
+    .eq('provider', 'stripe')
+    .not('stripe_checkout_session_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const sessionId = pending?.stripe_checkout_session_id
+  if (!sessionId) return false
+
+  const stripe = getStripe()
+  if (!stripe) return false
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    if (session.status !== 'complete' && session.payment_status !== 'paid') {
+      return false
+    }
+  } catch {
+    return false
+  }
+
+  await fulfillCheckoutSession(sessionId)
+  return true
+}
+
 export async function applyStripeSubscriptionEvent(sub: {
   id: string
   status: string

@@ -7,7 +7,7 @@ export function getStripe(): Stripe | null {
 }
 
 export function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.tlbisbig.world').replace(/\/$/, '')
 }
 
 /** Stripe 2025+ moved period dates onto subscription items; older payloads still have them on the sub. */

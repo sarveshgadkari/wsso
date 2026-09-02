@@ -1,6 +1,6 @@
 /** Public app base URL for auth redirects and invite emails. */
 export function appBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.vercel.app'
+  return process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.tlbisbig.world'
 }
 
 /**

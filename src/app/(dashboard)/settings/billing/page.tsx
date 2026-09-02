@@ -1,6 +1,7 @@
 import { requireRole, getOrganization } from '@/lib/auth/session'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { PLAN_LABELS, STATUS_LABELS, formatUsd, isStripeConfigured, orgNeedsPayment } from '@/lib/saas/plans'
+import { recoverPaidCheckout } from '@/lib/saas/stripe-sync'
 import { Badge } from '@/components/ui/Badge'
 import { BillingCheckout } from '@/components/billing/BillingCheckout'
 
@@ -19,10 +20,15 @@ interface Props {
 
 export default async function BillingPage({ searchParams }: Props) {
   const profile = await requireRole(['admin'])
-  const org = await getOrganization(profile.organization_id)
+  let org = await getOrganization(profile.organization_id)
 
   if (!org) {
     return <p className="text-sm text-neutral-500">No workspace found.</p>
+  }
+
+  if (searchParams.success === '1' && orgNeedsPayment(org)) {
+    await recoverPaidCheckout(org.id)
+    org = (await getOrganization(profile.organization_id)) ?? org
   }
 
   const [{ count: seatsUsed }, { data: plans }, { data: payments }] = await Promise.all([
@@ -65,9 +71,16 @@ export default async function BillingPage({ searchParams }: Props) {
         </p>
       </div>
 
-      {searchParams.success === '1' && (
+      {searchParams.success === '1' && !due && (
         <div className="rounded-md border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-success-700">
           Payment received. Your workspace is active.
+        </div>
+      )}
+      {searchParams.success === '1' && due && (
+        <div className="rounded-md border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700">
+          Stripe Checkout finished, but this workspace is still marked unpaid.
+          Refresh this page in a few seconds. If it stays on Payment due, the Stripe webhook is not reaching WSSO
+          (URL <span className="font-mono text-xs">/api/billing/webhook</span> and signing secret on Vercel).
         </div>
       )}
       {searchParams.canceled === '1' && (

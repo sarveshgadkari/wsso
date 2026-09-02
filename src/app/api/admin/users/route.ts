@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 6. Generate a "set your password" link ──────────────────────────────────
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.vercel.app'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.tlbisbig.world'
 
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type:       'recovery',

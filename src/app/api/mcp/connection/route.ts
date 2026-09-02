@@ -8,7 +8,7 @@ import {
 } from '@/lib/mcp/long-lived-token'
 
 function appBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL || 'https://wsso.vercel.app').replace(/\/$/, '')
+  return (process.env.NEXT_PUBLIC_APP_URL || 'https://wsso.tlbisbig.world').replace(/\/$/, '')
 }
 
 function buildPayload(opts: {

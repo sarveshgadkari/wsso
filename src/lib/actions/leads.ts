@@ -48,7 +48,7 @@ const leadCreateSchema = z.object({
 })
 
 function dashboardSourceUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.vercel.app').replace(/\/$/, '')
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'https://wsso.tlbisbig.world').replace(/\/$/, '')
 }
 
 export async function createLead(raw: LeadCreateInput) {

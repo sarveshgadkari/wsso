@@ -6,12 +6,17 @@ import { ToastContainer } from '@/components/ui/Toast'
 import { redirect } from 'next/navigation'
 import { orgNeedsPayment } from '@/lib/saas/plans'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
+import { recoverPaidCheckout } from '@/lib/saas/stripe-sync'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile()
   if (isSuperAdmin(profile)) redirect('/platform')
 
-  const org = await getOrganization(profile.organization_id)
+  let org = await getOrganization(profile.organization_id)
+  if (org && profile.role === 'admin' && orgNeedsPayment(org)) {
+    await recoverPaidCheckout(org.id)
+    org = await getOrganization(profile.organization_id)
+  }
   const subscriptionLocked = org ? orgNeedsPayment(org) : false
   const features = mergeWorkspaceSettings(org?.settings).features
 
