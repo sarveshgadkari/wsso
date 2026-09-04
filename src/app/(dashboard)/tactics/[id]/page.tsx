@@ -9,6 +9,7 @@ import { getDocuments } from '@/lib/actions/documents'
 import { listChecklistTemplates } from '@/lib/actions/workspace'
 import { getTacticJobCost, listTacticChecklist } from '@/lib/actions/ops'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
+import { requireOrgId } from '@/lib/saas/tenant'
 
 interface Props {
   params: { id: string }
@@ -20,6 +21,7 @@ export async function generateMetadata() {
 
 export default async function TacticDetailPage({ params }: Props) {
   const profile  = await requireProfile()
+  const orgId    = requireOrgId(profile)
   const supabase = await createClient()
   const isAdmin   = profile.role === 'admin'
   const isManager = profile.role === 'manager'
@@ -34,6 +36,7 @@ export default async function TacticDetailPage({ params }: Props) {
         creator:profiles!tactics_created_by_fkey(id, full_name, employee_code)
       `)
       .eq('id', params.id)
+      .eq('organization_id', orgId)
       .single(),
 
     supabase
@@ -43,6 +46,7 @@ export default async function TacticDetailPage({ params }: Props) {
         actor:profiles!activity_logs_employee_id_fkey(id, full_name, employee_code)
       `)
       .eq('tactic_id', params.id)
+      .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
 
     (isAdmin || isManager)
@@ -50,6 +54,7 @@ export default async function TacticDetailPage({ params }: Props) {
           .from('profiles')
           .select('id, full_name, employee_code')
           .eq('status', 'active')
+          .eq('organization_id', orgId)
           .order('full_name')
       : Promise.resolve({ data: [] as { id: string; full_name: string; employee_code: string }[] }),
 
@@ -57,6 +62,7 @@ export default async function TacticDetailPage({ params }: Props) {
       .from('projects')
       .select('id, name, code')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('name'),
   ])
 

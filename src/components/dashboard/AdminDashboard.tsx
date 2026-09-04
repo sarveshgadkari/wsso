@@ -32,6 +32,9 @@ export async function AdminDashboard() {
   const viewer    = await getProfile()
   if (!viewer) return null
 
+  const orgId = viewer.organization_id
+  if (!orgId) return null
+
   const tz        = resolveTimezone(viewer.timezone)
   const today     = todayInTimezone(tz)
   const thirtyAgo = daysAgo(30)
@@ -53,41 +56,44 @@ export async function AdminDashboard() {
     activeEmployeeIdsRes,
     leavePendingRes,
   ] = await Promise.all([
-    supabase.from('companies').select('*', { count: 'exact', head: true }),
+    supabase.from('companies').select('*', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'active'),
+      .eq('status', 'active')
+      .eq('organization_id', orgId),
     supabase.from('projects')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'active'),
+      .eq('status', 'active')
+      .eq('organization_id', orgId),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .eq('status', 'assigned'),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .eq('status', 'in_progress'),
-    // Overdue = due_date in the past, not done or archived
     supabase.from('tactics')
       .select(`
         id, assigned_to,
         assignee:profiles!tactics_assigned_to_fkey(id, full_name, employee_code)
       `)
+      .eq('organization_id', orgId)
       .lt('due_date', today)
       .neq('status', 'done')
       .neq('status', 'archived'),
-    // Tactics completed in the last 30 days (activity log entries)
     supabase.from('activity_logs')
       .select('id, created_at')
+      .eq('organization_id', orgId)
       .eq('action', 'Status changed to Done')
       .gte('created_at', thirtyAgo.toISOString()),
-    // Company-wide hours last 7 days
     supabase.from('time_logs')
       .select('log_date, duration_minutes')
+      .eq('organization_id', orgId)
       .gte('log_date', isoDate(sevenAgo))
       .not('duration_minutes', 'is', null),
-    // Active employee IDs — used for Mechanism 2 stale session check
-    supabase.from('profiles').select('id').eq('status', 'active'),
-    supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('profiles').select('id').eq('status', 'active').eq('organization_id', orgId),
+    supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending').eq('organization_id', orgId),
   ])
 
   // Mechanism 2: close any stale open sessions (>16 h) for all active employees
@@ -106,6 +112,7 @@ export async function AdminDashboard() {
     const { count } = await supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .eq('status', 'new')
     newLeadsCount = count ?? 0
   }

@@ -3,11 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 import { enrichTacticRows } from '@/lib/tactics/enrich-profiles'
+import { requireOrgId } from '@/lib/saas/tenant'
 
 export const metadata = { title: 'Kanban — WSSO' }
 
 export default async function KanbanPage() {
   const profile  = await requireProfile()
+  const orgId    = requireOrgId(profile)
   const supabase = await createClient()
 
   const { data } = await supabase
@@ -18,6 +20,7 @@ export default async function KanbanPage() {
       assignee:profiles!tactics_assigned_to_fkey(id, full_name, employee_code),
       creator:profiles!tactics_created_by_fkey(id, full_name, employee_code)
     `)
+    .eq('organization_id', orgId)
     .order('created_at', { ascending: false })
 
   const tactics = await enrichTacticRows((data ?? []) as unknown as TacticRow[])

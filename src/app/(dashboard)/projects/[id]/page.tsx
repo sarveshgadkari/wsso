@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { requireProfile } from '@/lib/auth/session'
+import { requireOrgId } from '@/lib/saas/tenant'
 import { createClient } from '@/lib/supabase/server'
 import { ProjectDetailShell } from '@/components/projects/ProjectDetailShell'
 import type { ProjectRow } from '@/components/projects/ProjectDialog'
@@ -15,9 +16,7 @@ export async function generateMetadata() {
 
 export default async function ProjectDetailPage({ params }: Props) {
   const profile = await requireProfile()
-
-  // Employees can reach this page via RLS if their tactics reference this project.
-  // Admin and manager have full access.
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
 
   const [projectRes, companiesRes, clientsRes, managersRes, tacticsRes] = await Promise.all([
@@ -30,14 +29,16 @@ export default async function ProjectDetailPage({ params }: Props) {
         manager:profiles!manager_id(id, full_name, employee_code)
       `)
       .eq('id', params.id)
+      .eq('organization_id', orgId)
       .single(),
-    supabase.from('companies').select('id, name, code').order('name'),
-    supabase.from('clients').select('id, name, code, company_id').order('name'),
+    supabase.from('companies').select('id, name, code').eq('organization_id', orgId).order('name'),
+    supabase.from('clients').select('id, name, code, company_id').eq('organization_id', orgId).order('name'),
     supabase
       .from('profiles')
       .select('id, full_name, employee_code')
       .eq('role', 'manager')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('full_name'),
     supabase
       .from('tactics')
@@ -48,6 +49,7 @@ export default async function ProjectDetailPage({ params }: Props) {
         creator:profiles!tactics_created_by_fkey(id, full_name, employee_code)
       `)
       .eq('project_id', params.id)
+      .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
   ])
 

@@ -432,6 +432,7 @@ export type Database = {
           id: string
           code: string
           name: string
+          organization_id: string
           company_id: string
           client_id: string | null
           manager_id: string | null
@@ -442,6 +443,7 @@ export type Database = {
           id?: string
           code?: string     // auto-generated (PRJ001…)
           name: string
+          organization_id?: string
           company_id: string
           client_id?: string | null
           manager_id?: string | null
@@ -452,6 +454,7 @@ export type Database = {
           id?: string
           code?: string
           name?: string
+          organization_id?: string
           company_id?: string
           client_id?: string | null
           manager_id?: string | null
@@ -483,16 +486,19 @@ export type Database = {
         Row: {
           tactic_id:  string
           profile_id: string
+          organization_id: string
           created_at: string
         }
         Insert: {
           tactic_id:   string
           profile_id:  string
+          organization_id?: string
           created_at?: string
         }
         Update: {
           tactic_id?:  string
           profile_id?: string
+          organization_id?: string
           created_at?: string
         }
         Relationships: [
@@ -961,6 +967,7 @@ export type Database = {
           file_size: number | null
           source_type: string
           external_url: string | null
+          organization_id: string
           company_code: string | null
           employee_code: string | null
           client_code: string | null
@@ -977,6 +984,7 @@ export type Database = {
           file_size?: number | null
           source_type?: string
           external_url?: string | null
+          organization_id?: string
           company_code?: string | null
           employee_code?: string | null
           client_code?: string | null
@@ -993,6 +1001,7 @@ export type Database = {
           file_size?: number | null
           source_type?: string
           external_url?: string | null
+          organization_id?: string
           company_code?: string | null
           employee_code?: string | null
           client_code?: string | null

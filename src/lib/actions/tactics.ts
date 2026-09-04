@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getAllowedNext, STATUS_LABEL } from '@/lib/tactics-utils'
 import { insertNotification } from '@/lib/actions/notifications'
+import { requireOrgId } from '@/lib/saas/tenant'
 import type { TacticStatus } from '@/lib/types'
 
 const TacticInputSchema = z.object({
@@ -34,7 +35,7 @@ const TacticInputSchema = z.object({
 
 export type TacticInput = z.infer<typeof TacticInputSchema>
 
-async function replaceTacticAssignees(tacticId: string, assigneeIds: string[]) {
+async function replaceTacticAssignees(tacticId: string, assigneeIds: string[], orgId: string) {
   const unique = Array.from(new Set(assigneeIds))
   const { error: delErr } = await supabaseAdmin
     .from('tactic_assignees')
@@ -44,8 +45,32 @@ async function replaceTacticAssignees(tacticId: string, assigneeIds: string[]) {
 
   const { error: insErr } = await supabaseAdmin
     .from('tactic_assignees')
-    .insert(unique.map(profile_id => ({ tactic_id: tacticId, profile_id })))
+    .insert(unique.map(profile_id => ({ tactic_id: tacticId, profile_id, organization_id: orgId })))
   if (insErr) throw new Error(insErr.message)
+}
+
+async function assertAssigneesInOrg(assigneeIds: string[], orgId: string) {
+  const unique = Array.from(new Set(assigneeIds))
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, organization_id')
+    .in('id', unique)
+  if (error) throw new Error(error.message)
+  if (!data || data.length !== unique.length || data.some((p) => p.organization_id !== orgId)) {
+    throw new Error('Assignees must belong to this workspace')
+  }
+}
+
+async function assertProjectInOrg(projectId: string | null | undefined, orgId: string) {
+  if (!projectId) return
+  const { data } = await supabaseAdmin
+    .from('projects')
+    .select('id, organization_id')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (!data || data.organization_id !== orgId) {
+    throw new Error('Project is not in this workspace')
+  }
 }
 
 export async function createTactic(raw: TacticInput) {
@@ -53,6 +78,9 @@ export async function createTactic(raw: TacticInput) {
   if (!['admin', 'manager'].includes(profile.role)) throw new Error('Unauthorized')
 
   const input = TacticInputSchema.parse(raw)
+  const orgId = requireOrgId(profile)
+  await assertAssigneesInOrg(input.assignee_ids, orgId)
+  await assertProjectInOrg(input.project_id, orgId)
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -65,6 +93,7 @@ export async function createTactic(raw: TacticInput) {
       project_id:      input.project_id      ?? null,
       assigned_to:     input.assigned_to,
       created_by:      profile.id,
+      organization_id: orgId,
       priority:        input.priority,
       due_date:        input.due_date         ?? null,
       estimated_hours: input.estimated_hours  ?? null,
@@ -75,7 +104,7 @@ export async function createTactic(raw: TacticInput) {
 
   if (error) throw new Error(error.message)
 
-  await replaceTacticAssignees(data.id, input.assignee_ids)
+  await replaceTacticAssignees(data.id, input.assignee_ids, orgId)
 
   await supabaseAdmin.from('activity_logs').insert({
     tactic_id:   data.id,
@@ -103,6 +132,9 @@ export async function updateTactic(id: string, raw: TacticInput) {
   if (!['admin', 'manager'].includes(profile.role)) throw new Error('Unauthorized')
 
   const input = TacticInputSchema.parse(raw)
+  const orgId = requireOrgId(profile)
+  await assertAssigneesInOrg(input.assignee_ids, orgId)
+  await assertProjectInOrg(input.project_id, orgId)
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -119,12 +151,13 @@ export async function updateTactic(id: string, raw: TacticInput) {
       estimated_hours: input.estimated_hours  ?? null,
     })
     .eq('id', id)
+    .eq('organization_id', orgId)
     .select()
     .single()
 
   if (error) throw new Error(error.message)
 
-  await replaceTacticAssignees(id, input.assignee_ids)
+  await replaceTacticAssignees(id, input.assignee_ids, orgId)
 
   await supabaseAdmin.from('activity_logs').insert({
     tactic_id:   id,
@@ -145,12 +178,14 @@ export async function transitionStatus(
   workNotes?: string,
 ) {
   const profile = await requireProfile()
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
 
   const { data: tactic, error: fetchErr } = await supabase
     .from('tactics')
     .select('id, title, status, assigned_to, created_by')
     .eq('id', tacticId)
+    .eq('organization_id', orgId)
     .single()
 
   if (fetchErr || !tactic) throw new Error('Tactic not found or access denied')
@@ -199,6 +234,7 @@ export async function transitionStatus(
     .from('tactics')
     .update({ status: targetStatus })
     .eq('id', tacticId)
+    .eq('organization_id', orgId)
 
   if (updateErr) throw new Error(updateErr.message)
 
@@ -244,11 +280,13 @@ export async function logHours(
   const profile = await requireProfile()
   if (hours <= 0 || hours > 24) throw new Error('Hours must be between 0.1 and 24')
 
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
   const { data: tactic } = await supabase
     .from('tactics')
     .select('id')
     .eq('id', tacticId)
+    .eq('organization_id', orgId)
     .single()
 
   if (!tactic) throw new Error('Tactic not found or access denied')
@@ -270,11 +308,13 @@ export async function submitWorkUpdate(tacticId: string, notes: string) {
   const trimmed = notes.trim()
   if (!trimmed) throw new Error('Please describe what you worked on')
 
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
   const { data: tactic } = await supabase
     .from('tactics')
     .select('id, assigned_to, status')
     .eq('id', tacticId)
+    .eq('organization_id', orgId)
     .single()
 
   if (!tactic) throw new Error('Work order not found or access denied')
@@ -314,12 +354,14 @@ const DOCUMENTS_BUCKET = 'documents'
 
 export async function deleteTactic(id: string) {
   const profile = await requireProfile()
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
 
   const { data: tactic, error: fetchErr } = await supabase
     .from('tactics')
     .select('id, code, title, created_by')
     .eq('id', id)
+    .eq('organization_id', orgId)
     .single()
 
   if (fetchErr || !tactic) throw new Error('Work order not found or access denied')
@@ -332,6 +374,7 @@ export async function deleteTactic(id: string) {
     .from('documents')
     .select('id, file_path, source_type')
     .eq('tactic_code', tactic.code)
+    .eq('organization_id', orgId)
 
   if (docs?.length) {
     const filePaths = docs
@@ -340,10 +383,10 @@ export async function deleteTactic(id: string) {
     if (filePaths.length) {
       await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).remove(filePaths)
     }
-    await supabaseAdmin.from('documents').delete().eq('tactic_code', tactic.code)
+    await supabaseAdmin.from('documents').delete().eq('tactic_code', tactic.code).eq('organization_id', orgId)
   }
 
-  const { error } = await supabase.from('tactics').delete().eq('id', id)
+  const { error } = await supabase.from('tactics').delete().eq('id', id).eq('organization_id', orgId)
   if (error) throw new Error(error.message)
 
   revalidatePath('/tactics')

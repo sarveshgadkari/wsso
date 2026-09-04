@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import type { Profile } from '@/lib/types'
 
 // Map route paths to human-readable page titles.
@@ -36,10 +37,10 @@ const PAGE_TITLES: [string, string][] = [
 ]
 
 const ROLE_CHIP: Record<string, string> = {
-  super_admin: 'bg-amber-100 text-amber-800',
-  admin:    'bg-rose-100    text-rose-700',
-  director: 'bg-purple-100  text-purple-700',
-  manager:  'bg-primary-100 text-primary-700',
+  super_admin: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+  admin:    'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
+  director: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300',
+  manager:  'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-200',
   employee: 'bg-neutral-100 text-neutral-600',
 }
 
@@ -60,12 +61,14 @@ export function Topbar({ profile, notifCount, hideNotifications = false }: Topba
   const firstName = (profile?.full_name ?? 'User').split(' ')[0]
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6">
+    <header data-topbar className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6">
       {/* Page title */}
       <h1 className="text-base font-semibold text-neutral-900">{pageTitle}</h1>
 
       {/* Right-side actions */}
       <div className="flex items-center gap-5">
+        <ThemeToggle />
+
         {/* Notifications bell — live dropdown + Realtime (workspace users only) */}
         {profile.role !== 'super_admin' && !hideNotifications && (
           <NotificationBell initialCount={notifCount} userId={profile.id} />

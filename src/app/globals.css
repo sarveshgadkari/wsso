@@ -6,8 +6,36 @@
 
 @layer base {
   :root {
-    --background: 248 250 252;   /* neutral-50 */
-    --foreground: 15 23 42;      /* neutral-900 */
+    --background: 248 250 252;
+    --foreground: 15 23 42;
+    --neutral-50:  248 250 252;
+    --neutral-100: 241 245 249;
+    --neutral-200: 226 232 240;
+    --neutral-300: 203 213 225;
+    --neutral-400: 148 163 184;
+    --neutral-500: 100 116 139;
+    --neutral-600: 71 85 105;
+    --neutral-700: 51 65 85;
+    --neutral-800: 30 41 59;
+    --neutral-900: 15 23 42;
+    --neutral-950: 2 6 23;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    --background: 15 23 42;
+    --foreground: 248 250 252;
+    --neutral-50:  15 23 42;
+    --neutral-100: 30 41 59;
+    --neutral-200: 51 65 85;
+    --neutral-300: 71 85 105;
+    --neutral-400: 148 163 184;
+    --neutral-500: 148 163 184;
+    --neutral-600: 203 213 225;
+    --neutral-700: 226 232 240;
+    --neutral-800: 241 245 249;
+    --neutral-900: 248 250 252;
+    --neutral-950: 255 255 255;
   }
 
   * {
@@ -108,9 +136,28 @@
     pointer-events: none;
     @apply text-neutral-300;
   }
+
+  html.dark .tiptap-doc pre {
+    background-color: #020617;
+    color: #e2e8f0;
+  }
 }
 
 @media print {
+  html.dark {
+    color-scheme: light;
+    --neutral-50:  248 250 252;
+    --neutral-100: 241 245 249;
+    --neutral-200: 226 232 240;
+    --neutral-300: 203 213 225;
+    --neutral-400: 148 163 184;
+    --neutral-500: 100 116 139;
+    --neutral-600: 71 85 105;
+    --neutral-700: 51 65 85;
+    --neutral-800: 30 41 59;
+    --neutral-900: 15 23 42;
+    --neutral-950: 2 6 23;
+  }
   /* Hide dashboard chrome when printing a report */
   nav,
   aside,
@@ -124,6 +171,11 @@
     background: white;
   }
 
+  html.dark .bg-white,
+  html.dark .card {
+    background-color: #fff !important;
+  }
+
   .card {
     box-shadow: none !important;
     border: 1px solid #e2e8f0 !important;
@@ -133,4 +185,62 @@
   tr {
     page-break-inside: avoid;
   }
+}
+
+/* Dark theme — unlayered so these beat Tailwind utility classes on dashboard screens */
+html.dark .bg-white {
+  background-color: rgb(var(--neutral-100));
+}
+
+html.dark .card {
+  box-shadow: none;
+}
+
+html.dark .bg-primary-50 {
+  background-color: rgb(45 22 76 / 0.55);
+}
+
+html.dark .bg-success-50 {
+  background-color: rgb(20 83 45 / 0.35);
+}
+
+html.dark .bg-warning-50 {
+  background-color: rgb(120 53 15 / 0.35);
+}
+
+html.dark .bg-danger-50 {
+  background-color: rgb(127 29 29 / 0.35);
+}
+
+html.dark .text-primary-700 {
+  color: #e9d5f5;
+}
+
+html.dark .text-success-700 {
+  color: #86efac;
+}
+
+html.dark .text-warning-700 {
+  color: #fcd34d;
+}
+
+html.dark .text-danger-700 {
+  color: #fca5a5;
+}
+
+html.dark input:not([type='checkbox']):not([type='radio']),
+html.dark textarea,
+html.dark select {
+  color-scheme: dark;
+}
+
+html.dark .tiptap-doc pre {
+  background-color: #020617;
+  color: #e2e8f0;
+}
+
+html.dark .shadow-card {
+  --tw-shadow: 0 0 0 1px rgb(255 255 255 / 0.06);
+  --tw-shadow-colored: 0 0 0 1px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }

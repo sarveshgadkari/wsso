@@ -3,16 +3,17 @@ import { createClient } from '@/lib/supabase/server'
 import { TacticsList } from '@/components/tactics/TacticsList'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 import { enrichTacticRows } from '@/lib/tactics/enrich-profiles'
+import { requireOrgId } from '@/lib/saas/tenant'
 
 export const metadata = { title: 'Work Orders — WSSO' }
 
 export default async function TacticsPage() {
   const profile  = await requireProfile()
+  const orgId    = requireOrgId(profile)
   const supabase = await createClient()
   const isAdmin   = profile.role === 'admin'
   const isManager = profile.role === 'manager'
 
-  // RLS auto-scopes: admin→all, manager→created_by=me OR team's tactics, employee→assigned_to=me
   const [tacticsRes, employeesRes, projectsRes] = await Promise.all([
     supabase
       .from('tactics')
@@ -22,6 +23,7 @@ export default async function TacticsPage() {
         assignee:profiles!tactics_assigned_to_fkey(id, full_name, employee_code),
         creator:profiles!tactics_created_by_fkey(id, full_name, employee_code)
       `)
+      .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
 
     (isAdmin || isManager)
@@ -29,6 +31,7 @@ export default async function TacticsPage() {
           .from('profiles')
           .select('id, full_name, employee_code')
           .eq('status', 'active')
+          .eq('organization_id', orgId)
           .order('full_name')
       : Promise.resolve({ data: [] as { id: string; full_name: string; employee_code: string }[] }),
 
@@ -36,6 +39,7 @@ export default async function TacticsPage() {
       .from('projects')
       .select('id, name, code')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('name'),
   ])
 
@@ -54,7 +58,7 @@ export default async function TacticsPage() {
         <h2 className="text-xl font-semibold text-neutral-900">Work Orders</h2>
         <p className="mt-1 text-sm text-neutral-500">
           {isAdmin
-            ? 'All work orders across the organisation. Codes are auto-generated (TAC001…).'
+            ? 'All work orders in this workspace. Codes are auto-generated (TAC001…).'
             : isManager
               ? 'Work orders you created or assigned to your team.'
               : 'Tasks assigned to you. Overdue tasks are highlighted in red.'}

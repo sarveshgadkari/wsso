@@ -14,7 +14,7 @@ interface SidebarProps {
 // SidebarNavLinks (client) handles usePathname() for active highlighting.
 export function Sidebar({ role, notifCount, subscriptionLocked = false, features }: SidebarProps) {
   return (
-    <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
+    <aside data-sidebar className="flex h-screen w-[220px] shrink-0 flex-col border-r border-neutral-200 bg-white">
       {/* Brand */}
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-neutral-200 px-3">
         <BrandLogo size={48} href="/dashboard" />

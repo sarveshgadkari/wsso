@@ -207,6 +207,7 @@ export async function applyChecklistToTactic(tacticId: string, templateId: strin
     .from('tactics')
     .update({ checklist_template_id: templateId })
     .eq('id', tacticId)
+    .eq('organization_id', profile.organization_id)
 
   revalidatePath(`/tactics/${tacticId}`)
   return { ok: true }
@@ -399,6 +400,7 @@ export async function runDueRecurringJobs(today = new Date().toISOString().split
     await supabaseAdmin.from('tactic_assignees').insert({
       tactic_id: tactic.id,
       profile_id: job.assigned_to,
+      organization_id: orgId,
     })
 
     if (job.checklist_template_id) {
@@ -558,12 +560,14 @@ export type JobCostSummary = {
 }
 
 export async function getTacticJobCost(tacticId: string): Promise<JobCostSummary | null> {
-  await requireProfile()
+  const profile = await requireProfile()
+  if (!profile.organization_id) return null
   const supabase = await createClient()
   const { data: tactic } = await supabase
     .from('tactics')
     .select('id, estimated_hours, billable, assigned_to')
     .eq('id', tacticId)
+    .eq('organization_id', profile.organization_id)
     .single()
   if (!tactic) return null
 

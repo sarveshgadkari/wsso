@@ -44,6 +44,8 @@ export async function ManagerDashboard() {
   const supabase   = await createClient()
   const viewer     = await getProfile()
   if (!viewer) return null
+  const orgId = viewer.organization_id
+  if (!orgId) return null
 
   const pendingTacticCount = await countPendingTacticDocuments(viewer)
   const viewerTz   = resolveTimezone(viewer?.timezone)
@@ -65,15 +67,19 @@ export async function ManagerDashboard() {
   ] = await Promise.all([
     supabase.from('profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'active'),
+      .eq('status', 'active')
+      .eq('organization_id', orgId),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .eq('status', 'assigned'),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .eq('status', 'in_progress'),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .lt('due_date', today)
       .neq('status', 'done')
       .neq('status', 'archived'),
@@ -82,19 +88,20 @@ export async function ManagerDashboard() {
         id, code, title, priority,
         assignee:profiles!tactics_assigned_to_fkey(full_name)
       `)
+      .eq('organization_id', orgId)
       .eq('status', 'review'),
-    // Team members for the table
     supabase.from('profiles')
       .select('id, full_name, employee_code, timezone')
-      .eq('status', 'active'),
-    // Today's time logs per employee
+      .eq('status', 'active')
+      .eq('organization_id', orgId),
     supabase.from('time_logs')
       .select('employee_id, log_date, duration_minutes')
+      .eq('organization_id', orgId)
       .gte('log_date', isoDate(daysAgo(14)))
       .not('duration_minutes', 'is', null),
-    // Team hours per day last 7 days (for chart)
     supabase.from('time_logs')
       .select('log_date, duration_minutes')
+      .eq('organization_id', orgId)
       .gte('log_date', isoDate(sevenAgo))
       .not('duration_minutes', 'is', null),
   ])
@@ -103,6 +110,7 @@ export async function ManagerDashboard() {
   const { data: openTactics } = await supabase
     .from('tactics')
     .select('assigned_to')
+    .eq('organization_id', orgId)
     .in('status', ['assigned', 'in_progress'])
 
   const openByEmployee: Record<string, number> = {}

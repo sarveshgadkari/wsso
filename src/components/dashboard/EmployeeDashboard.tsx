@@ -102,7 +102,9 @@ function TacticSection({
 
 export async function EmployeeDashboard() {
   const profile  = await getProfile()
-  const tz       = resolveTimezone(profile?.timezone)
+  if (!profile?.organization_id) return null
+  const orgId    = profile.organization_id
+  const tz       = resolveTimezone(profile.timezone)
   const supabase = await createClient()
   const today      = todayInTimezone(tz)
   const weekStart  = startOfWeekInTimezone(tz)
@@ -117,18 +119,22 @@ export async function EmployeeDashboard() {
   ] = await Promise.all([
     supabase.from('tactics')
       .select('id, code, title, due_date, status, priority')
+      .eq('organization_id', orgId)
       .neq('status', 'archived')
       .order('due_date', { ascending: true, nullsFirst: false }),
     supabase.from('time_logs')
       .select('duration_minutes')
+      .eq('organization_id', orgId)
       .eq('log_date', today)
       .not('duration_minutes', 'is', null),
     supabase.from('time_logs')
       .select('duration_minutes')
+      .eq('organization_id', orgId)
       .gte('log_date', weekStart)
       .not('duration_minutes', 'is', null),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
       .eq('status', 'done')
       .gte('updated_at', thirtyAgo.toISOString()),
   ])

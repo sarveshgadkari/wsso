@@ -35,7 +35,7 @@ export function PlatformSidebar() {
               className={cn(
                 'group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
                 isActive
-                  ? 'bg-primary-50 text-primary-700 font-medium'
+                  ? 'bg-primary-50 text-primary-700 font-medium dark:bg-primary-500/20 dark:text-primary-200'
                   : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
               )}
             >

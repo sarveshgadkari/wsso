@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireProfile } from '@/lib/auth/session'
+import { requireOrgId } from '@/lib/saas/tenant'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
@@ -44,6 +45,7 @@ async function resolveEntityCodes(
   supabase: Awaited<ReturnType<typeof createClient>>,
   entityType: string,
   entityId: string,
+  orgId: string,
 ): Promise<EntityCodes> {
   let company_code:  string | null = null
   let employee_code: string | null = null
@@ -64,6 +66,7 @@ async function resolveEntityCodes(
         )
       `)
       .eq('id', entityId)
+      .eq('organization_id', orgId)
       .single()
 
     if (!tactic) throw new Error('Work order not found or access denied')
@@ -93,6 +96,7 @@ async function resolveEntityCodes(
         company:companies!projects_company_id_fkey(code)
       `)
       .eq('id', entityId)
+      .eq('organization_id', orgId)
       .single()
 
     if (!project) throw new Error('Project not found or access denied')
@@ -110,6 +114,7 @@ async function resolveEntityCodes(
         company:companies!clients_company_id_fkey(code)
       `)
       .eq('id', entityId)
+      .eq('organization_id', orgId)
       .single()
 
     if (!client) throw new Error('Client not found or access denied')
@@ -161,7 +166,7 @@ export async function uploadDocument(formData: FormData) {
   if (!file || file.size === 0) throw new Error('No file provided')
   if (!entityType || !entityId) throw new Error('Entity type and ID are required')
 
-  const codes = await resolveEntityCodes(supabase, entityType, entityId)
+  const codes = await resolveEntityCodes(supabase, entityType, entityId, requireOrgId(profile))
 
   await ensureBucket()
 
@@ -212,7 +217,7 @@ export async function addDocumentLink(input: {
   const supabase = await createClient()
 
   const externalUrl = normalizeLink(input.url)
-  const codes = await resolveEntityCodes(supabase, input.entity_type, input.entity_id)
+  const codes = await resolveEntityCodes(supabase, input.entity_type, input.entity_id, requireOrgId(profile))
 
   const { data, error } = await supabaseAdmin
     .from('documents')

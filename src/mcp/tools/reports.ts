@@ -62,8 +62,9 @@ export function registerReportTools(server: McpServer) {
     },
     async (args, extra) =>
       runTool(async () => {
-        const { supabase } = getMcpClient(extra)
-        let query = supabase.from('tactics').select('id, status, priority, project_id')
+        const { supabase, profile } = getMcpClient(extra)
+        if (!profile.organization_id) throw new Error('No workspace')
+        let query = supabase.from('tactics').select('id, status, priority, project_id').eq('organization_id', profile.organization_id)
         if (args.project_id) query = query.eq('project_id', args.project_id)
         const { data, error } = await query
         if (error) throw new Error(error.message)
@@ -94,11 +95,12 @@ export function registerReportTools(server: McpServer) {
     },
     async ({ project_id }, extra) =>
       runTool(async () => {
-        const { supabase } = getMcpClient(extra)
+        const { supabase, profile } = getMcpClient(extra)
         const { data: project, error: pErr } = await supabase
           .from('projects')
           .select('id, name, code, status')
           .eq('id', project_id)
+          .eq('organization_id', profile.organization_id ?? '')
           .single()
         if (pErr) throw new Error(pErr.message)
 
@@ -106,6 +108,7 @@ export function registerReportTools(server: McpServer) {
           .from('tactics')
           .select('id, status')
           .eq('project_id', project_id)
+          .eq('organization_id', profile.organization_id ?? '')
         if (error) throw new Error(error.message)
 
         const total = tactics?.length ?? 0

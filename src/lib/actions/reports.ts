@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
+import { requireOrgId } from '@/lib/saas/tenant'
 import { todayInTimezone, liveWorkedMinutes } from '@/lib/utils/dates'
 import { resolveTimezone, timezoneShortLabel } from '@/lib/utils/timezones'
 import type {
@@ -183,7 +184,8 @@ export async function getEmployeePerformanceReport(
   from: string,
   to:   string,
 ): Promise<PerformanceRow[]> {
-  await requireRole(['admin', 'manager'])
+  const profile = await requireRole(['admin', 'manager'])
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
   const today    = await viewerToday()
   const toEnd    = `${to}T23:59:59.999Z`
@@ -193,26 +195,27 @@ export async function getEmployeePerformanceReport(
       .from('profiles')
       .select('id, full_name, employee_code, timezone')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('full_name'),
-    // All non-archived tactics (current workload)
     supabase.from('tactics')
       .select('assigned_to')
+      .eq('organization_id', orgId)
       .neq('status', 'archived'),
-    // Completed in the selected range — using updated_at as proxy for done_at
     supabase.from('tactics')
       .select('assigned_to, created_at, updated_at')
+      .eq('organization_id', orgId)
       .eq('status', 'done')
       .gte('updated_at', from)
       .lte('updated_at', toEnd),
-    // Currently overdue (not done/archived)
     supabase.from('tactics')
       .select('assigned_to')
+      .eq('organization_id', orgId)
       .lt('due_date', today)
       .neq('status', 'done')
       .neq('status', 'archived'),
-    // Clock hours in the range (includes open sessions via logMinutes)
     supabase.from('time_logs')
       .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
+      .eq('organization_id', orgId)
       .gte('log_date', from)
       .lte('log_date', to),
   ])
@@ -272,10 +275,11 @@ export async function getEmployeePerformanceReport(
 export async function getProjectProgressReport(
   statusFilter?: string,
 ): Promise<ProjectProgressRow[]> {
-  await requireRole(['admin', 'manager'])
+  const profile = await requireRole(['admin', 'manager'])
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
 
-  let projectQuery = supabase.from('projects').select('id, code, name, status').order('name')
+  let projectQuery = supabase.from('projects').select('id, code, name, status').eq('organization_id', orgId).order('name')
   if (statusFilter && statusFilter !== 'all') {
     projectQuery = projectQuery.eq('status', statusFilter)
   }
@@ -284,9 +288,11 @@ export async function getProjectProgressReport(
     projectQuery,
     supabase.from('tactics')
       .select('project_id, status, estimated_hours')
+      .eq('organization_id', orgId)
       .not('project_id', 'is', null),
     supabase.from('activity_logs')
       .select('hours_logged, tactic:tactics!activity_logs_tactic_id_fkey(project_id)')
+      .eq('organization_id', orgId)
       .not('hours_logged', 'is', null),
   ])
 
@@ -338,7 +344,8 @@ export async function getWorkOrdersReport(params: {
   from?:       string
   to?:         string
 }): Promise<WorkOrderRow[]> {
-  await requireRole(['admin', 'manager'])
+  const profile = await requireRole(['admin', 'manager'])
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
   const today    = await viewerToday()
 
@@ -346,7 +353,7 @@ export async function getWorkOrdersReport(params: {
     id, code, title, status, priority, due_date, estimated_hours, created_at,
     assignee:profiles!tactics_assigned_to_fkey(full_name),
     project:projects!tactics_project_id_fkey(name)
-  `).order('created_at', { ascending: false })
+  `).eq('organization_id', orgId).order('created_at', { ascending: false })
 
   const { status, project_id, from, to } = params
 

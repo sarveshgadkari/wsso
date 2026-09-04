@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { parseExcelBufferAllSheets } from '@/lib/my-work/parse-excel'
 import { parseDocumentBuffer } from '@/lib/my-work/parse-document'
+import { requireOrgId } from '@/lib/saas/tenant'
 import type {
   WorkSheet,
   WorkSheetRow,
@@ -572,11 +573,13 @@ export async function deleteWorkSheet(sheetId: string): Promise<void> {
 
 export async function getMyWorkOrderOptions(): Promise<WorkOrderOption[]> {
   const profile  = await requireProfile()
+  const orgId    = requireOrgId(profile)
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('tactics')
     .select('id, code, title, status')
+    .eq('organization_id', orgId)
     .eq('assigned_to', profile.id)
     .neq('status', 'archived')
     .order('updated_at', { ascending: false })
@@ -591,6 +594,7 @@ export async function createPersonalWorkOrder(
   description: string | null,
 ): Promise<{ id: string; code: string; title: string }> {
   const profile = await requireProfile()
+  const orgId = requireOrgId(profile)
   const trimmed = title.trim()
   if (!trimmed) throw new Error('Title is required')
 
@@ -602,6 +606,7 @@ export async function createPersonalWorkOrder(
       description: description?.trim() || null,
       assigned_to: profile.id,
       created_by:  profile.id,
+      organization_id: orgId,
       priority:    'medium',
       status:      'assigned',
     })
@@ -628,6 +633,7 @@ export async function linkRowToWorkOrder(
   tacticId:  string | null,
 ): Promise<WorkSheetRow[]> {
   const profile  = await requireProfile()
+  const orgId    = requireOrgId(profile)
   const supabase = await createClient()
 
   await assertSheetAccess(supabase, sheetId, profile.id, true)
@@ -649,6 +655,7 @@ export async function linkRowToWorkOrder(
       .from('tactics')
       .select('id')
       .eq('id', tacticId)
+      .eq('organization_id', orgId)
       .eq('assigned_to', profile.id)
       .maybeSingle()
     if (!tactic) throw new Error('Work order not found or not assigned to you')

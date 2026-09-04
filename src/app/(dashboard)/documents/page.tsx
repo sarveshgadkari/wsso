@@ -1,4 +1,5 @@
 import { requireProfile } from '@/lib/auth/session'
+import { requireOrgId } from '@/lib/saas/tenant'
 import { createClient } from '@/lib/supabase/server'
 import { getDocuments } from '@/lib/actions/documents'
 import { DocumentsShell } from '@/components/documents/DocumentsShell'
@@ -7,13 +8,14 @@ export const metadata = { title: 'Documents — WSSO' }
 
 export default async function DocumentsPage() {
   const profile  = await requireProfile()
+  const orgId    = requireOrgId(profile)
   const supabase = await createClient()
 
-  // Entity options for the upload dialog — scoped by RLS automatically
   const [tacticsRes, projectsRes, clientsRes, initialDocs] = await Promise.all([
     supabase
       .from('tactics')
       .select('id, code, title')
+      .eq('organization_id', orgId)
       .neq('status', 'archived')
       .order('created_at', { ascending: false })
       .limit(200),
@@ -21,11 +23,13 @@ export default async function DocumentsPage() {
       .from('projects')
       .select('id, code, name')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('name'),
     supabase
       .from('clients')
       .select('id, code, name')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('name'),
     getDocuments({}),
   ])

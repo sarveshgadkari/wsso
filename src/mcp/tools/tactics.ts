@@ -13,8 +13,10 @@ import { getAllowedNext, STATUS_LABEL } from '@/lib/tactics-utils'
 import type { TacticStatus } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { insertNotification } from '@/lib/actions/notifications'
+import { requireOrgId } from '@/lib/saas/tenant'
 
 export function registerTacticTools(server: McpServer) {
+  const orgOf = (profile: { organization_id: string | null }) => requireOrgId(profile)
   server.registerTool(
     'tactics_list',
     {
@@ -31,7 +33,8 @@ export function registerTacticTools(server: McpServer) {
     },
     async (args, extra) =>
       runTool(async () => {
-        const { supabase } = getMcpClient(extra)
+        const { supabase, profile } = getMcpClient(extra)
+        if (!profile.organization_id) throw new Error('No workspace')
         let query = supabase
           .from('tactics')
           .select(
@@ -39,6 +42,7 @@ export function registerTacticTools(server: McpServer) {
              assignee:profiles!tactics_assigned_to_fkey(id, full_name, employee_code),
              project:projects(id, name, code)`,
           )
+          .eq('organization_id', orgOf(profile))
           .order('created_at', { ascending: false })
           .range(args.offset, args.offset + args.limit - 1)
 
@@ -72,6 +76,7 @@ export function registerTacticTools(server: McpServer) {
              project:projects(id, name, code)`,
           )
           .eq('id', id)
+          .eq('organization_id', orgOf(profile))
           .single()
         if (error) throw new Error(error.message)
 
@@ -116,6 +121,7 @@ export function registerTacticTools(server: McpServer) {
         if (!['admin', 'manager'].includes(profile.role)) {
           throw new Error('Unauthorized: only admin/manager can create work orders')
         }
+        if (!profile.organization_id) throw new Error('No workspace')
 
         const { data, error } = await supabase
           .from('tactics')
@@ -127,6 +133,7 @@ export function registerTacticTools(server: McpServer) {
             project_id: args.project_id ?? null,
             assigned_to: args.assigned_to,
             created_by: profile.id,
+            organization_id: orgOf(profile),
             priority: args.priority,
             due_date: args.due_date ?? null,
             estimated_hours: args.estimated_hours ?? null,
@@ -141,7 +148,11 @@ export function registerTacticTools(server: McpServer) {
         )
         await supabaseAdmin.from('tactic_assignees').delete().eq('tactic_id', data.id)
         await supabaseAdmin.from('tactic_assignees').insert(
-          createAssigneeIds.map(profile_id => ({ tactic_id: data.id, profile_id })),
+          createAssigneeIds.map(profile_id => ({
+            tactic_id: data.id,
+            profile_id,
+            organization_id: orgOf(profile),
+          })),
         )
 
         await supabaseAdmin.from('activity_logs').insert({
@@ -205,6 +216,7 @@ export function registerTacticTools(server: McpServer) {
             estimated_hours: args.estimated_hours ?? null,
           })
           .eq('id', args.id)
+          .eq('organization_id', orgOf(profile))
           .select()
           .single()
         if (error) throw new Error(error.message)
@@ -248,6 +260,7 @@ export function registerTacticTools(server: McpServer) {
           .from('tactics')
           .select('id, title, status, assigned_to, created_by')
           .eq('id', args.id)
+          .eq('organization_id', orgOf(profile))
           .single()
         if (fetchErr || !tactic) throw new Error('Tactic not found or access denied')
 
@@ -297,6 +310,7 @@ export function registerTacticTools(server: McpServer) {
           .from('tactics')
           .update({ status: args.target_status })
           .eq('id', args.id)
+          .eq('organization_id', orgOf(profile))
         if (updateErr) throw new Error(updateErr.message)
 
         await supabaseAdmin.from('activity_logs').insert({
@@ -346,6 +360,7 @@ export function registerTacticTools(server: McpServer) {
           .from('tactics')
           .select('id')
           .eq('id', args.id)
+          .eq('organization_id', orgOf(profile))
           .single()
         if (!tactic) throw new Error('Tactic not found or access denied')
 
@@ -378,6 +393,7 @@ export function registerTacticTools(server: McpServer) {
           .from('tactics')
           .select('id, assigned_to, status')
           .eq('id', args.id)
+          .eq('organization_id', orgOf(profile))
           .single()
         if (!tactic) throw new Error('Work order not found or access denied')
         if (profile.role === 'employee' && tactic.assigned_to !== profile.id) {
@@ -412,13 +428,14 @@ export function registerTacticTools(server: McpServer) {
           .from('tactics')
           .select('id, code, created_by')
           .eq('id', id)
+          .eq('organization_id', orgOf(profile))
           .single()
         if (fetchErr || !tactic) throw new Error('Work order not found or access denied')
         if (profile.role !== 'admin' && tactic.created_by !== profile.id) {
           throw new Error('Only the creator or an admin can delete this work order')
         }
 
-        const { error } = await supabase.from('tactics').delete().eq('id', id)
+        const { error } = await supabase.from('tactics').delete().eq('id', id).eq('organization_id', orgOf(profile))
         if (error) throw new Error(error.message)
         return { deleted: id }
       }),

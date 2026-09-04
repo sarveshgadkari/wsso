@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
+import { useIsDark } from '@/components/theme/ThemeProvider'
 
 export interface DayBar {
   label: string   // 'Mon', 'Tue', …
@@ -25,6 +26,13 @@ const TODAY_LABEL = new Date().toLocaleDateString('en-US', { weekday: 'short' })
 
 export function WeeklyChart({ data, title = 'Hours — last 7 days' }: Props) {
   const max = Math.max(...data.map((d) => d.hours), 4)
+  const dark = useIsDark()
+  const axis = dark ? '#94a3b8' : '#64748b'
+  const muted = dark ? '#64748b' : '#94a3b8'
+  const cursor = dark ? '#1e293b' : '#f1f5f9'
+  const border = dark ? '#334155' : '#e2e8f0'
+  const tooltipBg = dark ? '#1e293b' : '#ffffff'
+  const tooltipColor = dark ? '#f8fafc' : '#0f172a'
 
   return (
     <div className="card p-5">
@@ -33,27 +41,29 @@ export function WeeklyChart({ data, title = 'Hours — last 7 days' }: Props) {
         <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 12, fill: '#64748b' }}
+            tick={{ fontSize: 12, fill: axis }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             domain={[0, max]}
-            tick={{ fontSize: 11, fill: '#94a3b8' }}
+            tick={{ fontSize: 11, fill: muted }}
             tickFormatter={(v) => `${v}h`}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
-            cursor={{ fill: '#f1f5f9' }}
+            cursor={{ fill: cursor }}
             formatter={(v: number) => [`${v.toFixed(1)}h`, 'Hours']}
             labelFormatter={(label, payload) =>
               payload?.[0]?.payload?.date ?? label
             }
             contentStyle={{
               fontSize: 12,
-              border: '1px solid #e2e8f0',
+              border: `1px solid ${border}`,
               borderRadius: 6,
+              backgroundColor: tooltipBg,
+              color: tooltipColor,
             }}
           />
           <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
