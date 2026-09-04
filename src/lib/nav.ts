@@ -25,6 +25,7 @@ import {
   CreditCard,
   Inbox,
   ShieldCheck,
+  StickyNote,
 } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 import type { WorkspaceFeatureKey } from '@/lib/workspace/settings'
@@ -92,6 +93,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Training',       href: '/training',       icon: GraduationCap, feature: 'training' },
       { label: 'Documents',      href: '/documents',      icon: FileText, feature: 'documents' },
+      { label: 'Sticky Notes',   href: '/sticky-notes',   icon: StickyNote },
       { label: 'Announcements',  href: '/announcements',  icon: Megaphone, feature: 'announcements' },
       { label: 'Licenses',       href: '/compliance',     icon: ShieldCheck, roles: ['admin', 'manager'], feature: 'compliance' },
       { label: 'Reports',        href: '/reports',        icon: BarChart3,  roles: ['admin', 'manager'] },
@@ -132,6 +134,7 @@ export const DASHBOARD_PATHS = [
   '/connect-ai',
   '/approvals',
   '/compliance',
+  '/sticky-notes',
 ]
 
 /** Paths accessible only to admin/manager in the middleware */

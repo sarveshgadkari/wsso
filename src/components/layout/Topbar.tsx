@@ -28,6 +28,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/settings/workspace', 'Workspace settings'],
   ['/settings/hierarchy', 'Workspace settings'],
   ['/settings/billing',   'Subscription'],
+  ['/sticky-notes',       'Sticky Notes'],
   ['/approvals',          'Approvals'],
   ['/compliance',         'Licenses'],
   ['/platform/payments',  'Payments'],

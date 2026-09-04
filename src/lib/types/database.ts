@@ -1056,6 +1056,70 @@ export type Database = {
         ]
       }
 
+      sticky_notes: {
+        Row: {
+          id: string
+          organization_id: string
+          profile_id: string
+          page_path: string
+          page_label: string
+          title: string
+          body: string
+          color: 'yellow' | 'pink' | 'blue' | 'green' | 'orange'
+          pos_x: number
+          pos_y: number
+          z_index: number
+          minimized: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          profile_id: string
+          page_path: string
+          page_label: string
+          title?: string
+          body?: string
+          color?: 'yellow' | 'pink' | 'blue' | 'green' | 'orange'
+          pos_x?: number
+          pos_y?: number
+          z_index?: number
+          minimized?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          profile_id?: string
+          page_path?: string
+          page_label?: string
+          title?: string
+          body?: string
+          color?: 'yellow' | 'pink' | 'blue' | 'green' | 'orange'
+          pos_x?: number
+          pos_y?: number
+          z_index?: number
+          minimized?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'sticky_notes_organization_id_fkey'
+            columns: ['organization_id']
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'sticky_notes_profile_id_fkey'
+            columns: ['profile_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       tactic_documents: {
         Row: {
           id: string
