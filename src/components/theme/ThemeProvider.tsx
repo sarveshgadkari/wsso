@@ -68,7 +68,7 @@ export function useTheme() {
   if (!ctx) {
     return {
       theme: 'light' as ThemePreference,
-      setTheme: (_theme: ThemePreference) => undefined,
+      setTheme: () => undefined,
       toggleTheme: () => undefined,
       enabled: false,
     }

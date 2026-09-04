@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/Button'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import {
   TacticDocumentList,
   type TacticDocRow,
@@ -17,15 +18,19 @@ export default async function TacticDocumentsPage() {
   const canFilter = ['admin', 'manager', 'director'].includes(profile.role)
 
   const docs = await fetchTacticDocumentsForProfile(profile) as TacticDocRow[]
+  const scope = await managerScope(profile)
 
   // Employees list for "Created by" filter (admin/manager/director only)
   let employees: { id: string; full_name: string; employee_code: string }[] = []
   if (canFilter) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, employee_code')
-      .eq('status', 'active')
-      .order('full_name')
+    const { data } = await applyManagerProfileFilter(
+      supabase
+        .from('profiles')
+        .select('id, full_name, employee_code')
+        .eq('status', 'active')
+        .order('full_name'),
+      scope,
+    )
     employees = data ?? []
   }
 

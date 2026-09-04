@@ -1,5 +1,7 @@
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { requireOrgId } from '@/lib/saas/tenant'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import { redirect } from 'next/navigation'
 import { EmployeeTable } from '@/components/employees/EmployeeTable'
 import type { EmployeeListRow } from '@/components/employees/EmployeeTable'
@@ -12,12 +14,15 @@ export default async function EmployeesPage() {
   // Only admin and manager can reach this page
   if (!['admin', 'manager'].includes(profile.role)) redirect('/dashboard')
 
-  // Use the regular (RLS-scoped) client — never the service-role client.
-  // Admin sees all profiles; manager automatically sees only their team's profiles.
+  const orgId = requireOrgId(profile)
+  const scope = await managerScope(profile)
   const supabase = await createClient()
 
   const [profilesRes, teamsRes, companiesRes, ecRes] = await Promise.all([
-    supabase.from('profiles').select('*').neq('role', 'super_admin').order('full_name'),
+    applyManagerProfileFilter(
+      supabase.from('profiles').select('*').neq('role', 'super_admin').eq('organization_id', orgId).order('full_name'),
+      scope,
+    ),
     supabase.from('teams').select('id, name, code, manager_id').order('name'),
     supabase.from('companies').select('id, name, code').order('name'),
     supabase.from('employee_companies').select('employee_id, company_id'),

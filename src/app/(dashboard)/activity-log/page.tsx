@@ -1,5 +1,6 @@
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import { ActivityLogFilters } from '@/components/activity-log/ActivityLogFilters'
 import { ActivityLogTable, type ActivityLogEntry } from '@/components/activity-log/ActivityLogTable'
 
@@ -62,11 +63,15 @@ export default async function ActivityLogPage({ searchParams }: PageProps) {
   // ── Employee list for filter dropdown ─────────────────────────────────────
   let employees: { id: string; full_name: string; employee_code: string }[] = []
   if (canSeeTeam) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, employee_code')
-      .eq('status', 'active')
-      .order('full_name')
+    const scope = await managerScope(profile)
+    const { data } = await applyManagerProfileFilter(
+      supabase
+        .from('profiles')
+        .select('id, full_name, employee_code')
+        .eq('status', 'active')
+        .order('full_name'),
+      scope,
+    )
     employees = data ?? []
   }
 

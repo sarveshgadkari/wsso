@@ -11,6 +11,7 @@ import { countPendingTacticDocuments } from '@/lib/tactic-documents/queries'
 import { getProfile, getOrganization } from '@/lib/auth/session'
 import { resolveTimezone } from '@/lib/utils/timezones'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import { listWhoIsWorking } from '@/lib/actions/ops'
 import { WhoIsWorkingCard } from '@/components/ops/WhoIsWorkingCard'
 import {
@@ -53,8 +54,8 @@ export async function ManagerDashboard() {
   const sevenAgo   = daysAgo(7)
   const org        = await getOrganization(viewer.organization_id)
   const features   = mergeWorkspaceSettings(org?.settings).features
+  const scope      = await managerScope(viewer)
 
-  // All queries use the regular client — RLS auto-scopes to manager's team
   const [
     teamRes,
     openRes,
@@ -65,10 +66,13 @@ export async function ManagerDashboard() {
     timeLogsRes,
     hoursLogsRes,
   ] = await Promise.all([
-    supabase.from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .eq('organization_id', orgId),
+    applyManagerProfileFilter(
+      supabase.from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .eq('organization_id', orgId),
+      scope,
+    ),
     supabase.from('tactics')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', orgId)
@@ -90,17 +94,20 @@ export async function ManagerDashboard() {
       `)
       .eq('organization_id', orgId)
       .eq('status', 'review'),
-    supabase.from('profiles')
-      .select('id, full_name, employee_code, timezone')
-      .eq('status', 'active')
-      .eq('organization_id', orgId),
+    applyManagerProfileFilter(
+      supabase.from('profiles')
+        .select('id, full_name, employee_code, timezone')
+        .eq('status', 'active')
+        .eq('organization_id', orgId),
+      scope,
+    ),
     supabase.from('time_logs')
       .select('employee_id, log_date, duration_minutes')
       .eq('organization_id', orgId)
       .gte('log_date', isoDate(daysAgo(14)))
       .not('duration_minutes', 'is', null),
     supabase.from('time_logs')
-      .select('log_date, duration_minutes')
+      .select('employee_id, log_date, duration_minutes')
       .eq('organization_id', orgId)
       .gte('log_date', isoDate(sevenAgo))
       .not('duration_minutes', 'is', null),
@@ -149,9 +156,12 @@ export async function ManagerDashboard() {
     openCount:     openByEmployee[m.id]     ?? 0,
   }))
 
-  // Team hours chart — aggregate all members per day
+  const memberIds = new Set(teamMembers.map((m) => m.id))
+
+  // Team hours chart — aggregate this manager's team only
   const hoursByDate: Record<string, number> = {}
-  ;(hoursLogsRes.data ?? []).forEach((l: { log_date: string; duration_minutes: number | null }) => {
+  ;(hoursLogsRes.data ?? []).forEach((l: { employee_id?: string; log_date: string; duration_minutes: number | null }) => {
+    if (l.employee_id && !memberIds.has(l.employee_id)) return
     if (l.log_date && l.duration_minutes) {
       hoursByDate[l.log_date] = (hoursByDate[l.log_date] ?? 0) + l.duration_minutes
     }

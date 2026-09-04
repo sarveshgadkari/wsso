@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
 import { TIMEZONE_VALUES } from '@/lib/utils/timezones'
+import { listVisibleProfileIds } from '@/lib/saas/team-scope'
 
 const profileUpdateSchema = z.object({
   full_name:  z.string().min(1, 'Full name is required'),
@@ -18,13 +19,20 @@ export async function updateEmployeeProfile(
   id: string,
   input: z.infer<typeof profileUpdateSchema>,
 ) {
-  await requireRole(['admin', 'manager'])
+  const viewer = await requireRole(['admin', 'manager'])
   const supabase = await createClient()
 
   const parsed = profileUpdateSchema.safeParse(input)
   if (!parsed.success) {
     const msg = Object.values(parsed.error.flatten().fieldErrors).flat()[0]
     return { error: msg ?? 'Invalid input' }
+  }
+
+  if (viewer.role === 'manager') {
+    const allowed = await listVisibleProfileIds(viewer)
+    if (!allowed?.includes(id)) {
+      return { error: 'You can only edit people on your team' }
+    }
   }
 
   // If demoting away from manager, ensure they don't still manage a team

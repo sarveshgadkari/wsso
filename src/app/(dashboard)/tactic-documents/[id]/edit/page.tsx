@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { TacticDocumentForm } from '@/components/tactic-documents/TacticDocumentForm'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import {
   canViewTacticDocument,
   fetchTacticDocumentById,
@@ -41,12 +42,16 @@ export default async function EditTacticDocumentPage({ params }: Props) {
   let projects:  { id: string; name: string; code: string }[] = []
 
   try {
+    const scope = await managerScope(profile)
     const [employeesRes, companiesRes, projectsRes] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, full_name, employee_code')
-        .eq('status', 'active')
-        .order('full_name'),
+      applyManagerProfileFilter(
+        supabase
+          .from('profiles')
+          .select('id, full_name, employee_code')
+          .eq('status', 'active')
+          .order('full_name'),
+        scope,
+      ),
       supabase.from('companies').select('id, name, code').order('name'),
       supabase.from('projects').select('id, name, code').eq('status', 'active').order('name'),
     ])

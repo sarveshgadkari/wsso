@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getAllowedNext, STATUS_LABEL } from '@/lib/tactics-utils'
 import { insertNotification } from '@/lib/actions/notifications'
 import { requireOrgId } from '@/lib/saas/tenant'
+import { assertAssigneesOnManagerTeam } from '@/lib/saas/team-scope'
 import type { TacticStatus } from '@/lib/types'
 
 const TacticInputSchema = z.object({
@@ -80,6 +81,7 @@ export async function createTactic(raw: TacticInput) {
   const input = TacticInputSchema.parse(raw)
   const orgId = requireOrgId(profile)
   await assertAssigneesInOrg(input.assignee_ids, orgId)
+  await assertAssigneesOnManagerTeam(profile, input.assignee_ids)
   await assertProjectInOrg(input.project_id, orgId)
   const supabase = await createClient()
 
@@ -134,6 +136,7 @@ export async function updateTactic(id: string, raw: TacticInput) {
   const input = TacticInputSchema.parse(raw)
   const orgId = requireOrgId(profile)
   await assertAssigneesInOrg(input.assignee_ids, orgId)
+  await assertAssigneesOnManagerTeam(profile, input.assignee_ids)
   await assertProjectInOrg(input.project_id, orgId)
   const supabase = await createClient()
 

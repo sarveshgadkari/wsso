@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { managerScope, profileVisibleToManager } from '@/lib/saas/team-scope'
 import { EmployeeDetail } from '@/components/employees/EmployeeDetail'
 import type { EmployeeDetailData } from '@/components/employees/EmployeeDetail'
 
@@ -43,6 +44,13 @@ export default async function EmployeeDetailPage({ params }: Props) {
 
   // RLS returns null if the requesting user cannot see this profile
   if (!profileRes.data) notFound()
+
+  if (viewer.role === 'manager') {
+    const scope = await managerScope(viewer)
+    if (scope && !profileVisibleToManager(viewer.id, scope.teamIds, profileRes.data)) {
+      notFound()
+    }
+  }
 
   const p          = profileRes.data
   const teams      = teamsRes.data     ?? []

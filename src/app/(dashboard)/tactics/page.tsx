@@ -4,6 +4,7 @@ import { TacticsList } from '@/components/tactics/TacticsList'
 import type { TacticRow } from '@/components/tactics/TacticDialog'
 import { enrichTacticRows } from '@/lib/tactics/enrich-profiles'
 import { requireOrgId } from '@/lib/saas/tenant'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 
 export const metadata = { title: 'Work Orders — WSSO' }
 
@@ -13,6 +14,7 @@ export default async function TacticsPage() {
   const supabase = await createClient()
   const isAdmin   = profile.role === 'admin'
   const isManager = profile.role === 'manager'
+  const scope     = await managerScope(profile)
 
   const [tacticsRes, employeesRes, projectsRes] = await Promise.all([
     supabase
@@ -27,12 +29,15 @@ export default async function TacticsPage() {
       .order('created_at', { ascending: false }),
 
     (isAdmin || isManager)
-      ? supabase
-          .from('profiles')
-          .select('id, full_name, employee_code')
-          .eq('status', 'active')
-          .eq('organization_id', orgId)
-          .order('full_name')
+      ? applyManagerProfileFilter(
+          supabase
+            .from('profiles')
+            .select('id, full_name, employee_code')
+            .eq('status', 'active')
+            .eq('organization_id', orgId)
+            .order('full_name'),
+          scope,
+        )
       : Promise.resolve({ data: [] as { id: string; full_name: string; employee_code: string }[] }),
 
     supabase

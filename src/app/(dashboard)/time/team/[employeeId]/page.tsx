@@ -16,6 +16,7 @@ import {
   liveWorkedMinutes,
 } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { managerScope, profileVisibleToManager } from '@/lib/saas/team-scope'
 
 interface Props {
   params: { employeeId: string }
@@ -39,6 +40,13 @@ export default async function EmployeeTimePage({ params }: Props) {
     .single()
 
   if (!employee) notFound()
+
+  if (viewer.role === 'manager') {
+    const scope = await managerScope(viewer)
+    if (scope && !profileVisibleToManager(viewer.id, scope.teamIds, employee)) {
+      notFound()
+    }
+  }
 
   try {
     await closeStaleSessionsForEmployees([params.employeeId])

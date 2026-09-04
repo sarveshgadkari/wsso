@@ -1,5 +1,6 @@
 import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import { TacticDocumentForm } from '@/components/tactic-documents/TacticDocumentForm'
 
 export const metadata = { title: 'New TACTIC — WSSO' }
@@ -13,12 +14,16 @@ export default async function NewTacticDocumentPage() {
   let projects:  { id: string; name: string; code: string }[] = []
 
   try {
+    const scope = await managerScope(profile)
     const [employeesRes, companiesRes, projectsRes] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, full_name, employee_code')
-        .eq('status', 'active')
-        .order('full_name'),
+      applyManagerProfileFilter(
+        supabase
+          .from('profiles')
+          .select('id, full_name, employee_code')
+          .eq('status', 'active')
+          .order('full_name'),
+        scope,
+      ),
       supabase.from('companies').select('id, name, code').order('name'),
       supabase.from('projects').select('id, name, code').eq('status', 'active').order('name'),
     ])

@@ -3,6 +3,7 @@ import { requireProfile } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 import { listCatalog } from '@/lib/actions/workspace'
 import { listComplianceRecords } from '@/lib/actions/ops'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import { ComplianceTable } from '@/components/ops/ComplianceTable'
 import { todayInTimezone, addCalendarDays } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
@@ -14,6 +15,7 @@ export default async function CompliancePage() {
   if (!['admin', 'manager'].includes(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
+  const scope = await managerScope(profile)
   const tz = resolveTimezone(profile.timezone)
   const today = todayInTimezone(tz)
   const soon = addCalendarDays(today, 30)
@@ -21,7 +23,10 @@ export default async function CompliancePage() {
   const [records, types, peopleRes, clientsRes] = await Promise.all([
     listComplianceRecords(),
     listCatalog('compliance_type', true),
-    supabase.from('profiles').select('id, full_name, employee_code').eq('status', 'active').order('full_name'),
+    applyManagerProfileFilter(
+      supabase.from('profiles').select('id, full_name, employee_code').eq('status', 'active').order('full_name'),
+      scope,
+    ),
     supabase.from('clients').select('id, name, code').eq('status', 'active').order('name'),
   ])
 

@@ -152,7 +152,39 @@ CREATE POLICY "profiles_director_select" ON public.profiles
 DROP POLICY IF EXISTS "profiles_manager_select" ON public.profiles;
 CREATE POLICY "profiles_manager_select" ON public.profiles
   FOR SELECT TO authenticated
-  USING (get_my_role() = 'manager' AND public.same_org(organization_id));
+  USING (
+    get_my_role() = 'manager'
+    AND public.same_org(organization_id)
+    AND (
+      id = auth.uid()
+      OR manager_id = auth.uid()
+      OR team_id IN (SELECT t.id FROM public.teams t WHERE t.manager_id = auth.uid())
+      OR (team_id IS NOT NULL AND team_id = public.get_my_team_id())
+    )
+  );
+
+DROP POLICY IF EXISTS "profiles_manager_write" ON public.profiles;
+CREATE POLICY "profiles_manager_write" ON public.profiles
+  FOR ALL TO authenticated
+  USING (
+    get_my_role() = 'manager'
+    AND public.same_org(organization_id)
+    AND id <> auth.uid()
+    AND (
+      manager_id = auth.uid()
+      OR team_id IN (SELECT t.id FROM public.teams t WHERE t.manager_id = auth.uid())
+      OR (team_id IS NOT NULL AND team_id = public.get_my_team_id())
+    )
+  )
+  WITH CHECK (
+    get_my_role() = 'manager'
+    AND public.same_org(organization_id)
+    AND (
+      manager_id = auth.uid()
+      OR team_id IN (SELECT t.id FROM public.teams t WHERE t.manager_id = auth.uid())
+      OR (team_id IS NOT NULL AND team_id = public.get_my_team_id())
+    )
+  );
 
 DROP POLICY IF EXISTS "companies_admin_all" ON public.companies;
 CREATE POLICY "companies_admin_all" ON public.companies

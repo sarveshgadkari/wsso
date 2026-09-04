@@ -13,6 +13,8 @@ import { resolveTimezone } from '@/lib/utils/timezones'
 import { PayrollExportButton } from '@/components/ops/PayrollExportButton'
 import { WhoIsWorkingCard } from '@/components/ops/WhoIsWorkingCard'
 import { listWhoIsWorking } from '@/lib/actions/ops'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
+import { requireOrgId } from '@/lib/saas/tenant'
 
 export const metadata = { title: 'Team Time — WSSO' }
 
@@ -21,12 +23,18 @@ export default async function TeamTimePage() {
   if (!['admin', 'manager'].includes(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
+  const orgId = requireOrgId(profile)
+  const scope = await managerScope(profile)
 
-  const { data: employees } = await supabase
-    .from('profiles')
-    .select('id, employee_code, full_name, team_id, status, timezone')
-    .eq('status', 'active')
-    .order('full_name')
+  const { data: employees } = await applyManagerProfileFilter(
+    supabase
+      .from('profiles')
+      .select('id, employee_code, full_name, team_id, status, timezone')
+      .eq('status', 'active')
+      .eq('organization_id', orgId)
+      .order('full_name'),
+    scope,
+  )
 
   const employeeIds = (employees ?? []).map((e) => e.id)
 
@@ -36,7 +44,7 @@ export default async function TeamTimePage() {
     console.error('[TeamTimePage] closeStaleSessionsForEmployees failed:', err)
   }
 
-  const { data: pendingNoteLogs } = await supabase
+  const pendingNotesQuery = supabase
     .from('time_logs')
     .select(`
       id, log_date, clock_in_note, clock_in_note_status, clock_out_note, clock_out_note_status,
@@ -44,6 +52,10 @@ export default async function TeamTimePage() {
     `)
     .or('clock_in_note_status.eq.pending,clock_out_note_status.eq.pending')
     .order('log_date', { ascending: false })
+
+  const { data: pendingNoteLogs } = employeeIds.length
+    ? await pendingNotesQuery.in('employee_id', employeeIds)
+    : { data: [] }
 
   const pendingNotes: PendingNoteRow[] = []
   ;(pendingNoteLogs ?? []).forEach((l) => {

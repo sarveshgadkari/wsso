@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
 import { requireOrgId } from '@/lib/saas/tenant'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 import { todayInTimezone, liveWorkedMinutes } from '@/lib/utils/dates'
 import { resolveTimezone, timezoneShortLabel } from '@/lib/utils/timezones'
 import type {
@@ -85,24 +86,36 @@ interface RawWorkOrderTactic {
 
 // ── Report 1: Daily Time ───────────────────────────────────────────────────────
 
-export async function getDailyTimeReport(date: string): Promise<DailyTimeRow[]> {
-  await requireRole(['admin', 'manager'])
+async function activeTeamProfiles() {
+  const profile = await requireRole(['admin', 'manager'])
+  const orgId = requireOrgId(profile)
   const supabase = await createClient()
-
-  const [profilesRes, logsRes] = await Promise.all([
+  const scope = await managerScope(profile)
+  const { data } = await applyManagerProfileFilter(
     supabase
       .from('profiles')
       .select('id, full_name, employee_code, timezone')
       .eq('status', 'active')
+      .eq('organization_id', orgId)
       .order('full_name'),
-    supabase
-      .from('time_logs')
-      .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
-      .eq('log_date', date),
-  ])
+    scope,
+  )
+  return { supabase, orgId, people: (data ?? []) as RawProfile[] }
+}
 
-  const profiles = (profilesRes.data ?? []) as RawProfile[]
-  const logs     = (logsRes.data     ?? []) as RawTimeLogRow[]
+export async function getDailyTimeReport(date: string): Promise<DailyTimeRow[]> {
+  const { supabase, people: profiles } = await activeTeamProfiles()
+  const ids = profiles.map((p) => p.id)
+
+  const { data: logsData } = ids.length
+    ? await supabase
+        .from('time_logs')
+        .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
+        .eq('log_date', date)
+        .in('employee_id', ids)
+    : { data: [] as RawTimeLogRow[] }
+
+  const logs = (logsData ?? []) as RawTimeLogRow[]
 
   const tzById = Object.fromEntries(profiles.map(p => [p.id, resolveTimezone(p.timezone)]))
 
@@ -130,27 +143,22 @@ export async function getWeeklyTimeReport(weekStartRaw: string): Promise<{
   weekStart: string
   weekDates: string[]
 }> {
-  await requireRole(['admin', 'manager'])
-  const supabase  = await createClient()
+  const { supabase, people: profiles } = await activeTeamProfiles()
+  const ids = profiles.map((p) => p.id)
   const weekStart = toMonday(weekStartRaw)
   const weekEnd   = addDays(weekStart, 6)
   const dates     = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
-  const [profilesRes, logsRes] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, full_name, employee_code, timezone')
-      .eq('status', 'active')
-      .order('full_name'),
-    supabase
-      .from('time_logs')
-      .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
-      .gte('log_date', weekStart)
-      .lte('log_date', weekEnd),
-  ])
+  const { data: logsData } = ids.length
+    ? await supabase
+        .from('time_logs')
+        .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
+        .gte('log_date', weekStart)
+        .lte('log_date', weekEnd)
+        .in('employee_id', ids)
+    : { data: [] as RawTimeLogRow[] }
 
-  const profiles = (profilesRes.data ?? []) as RawProfile[]
-  const logs     = (logsRes.data     ?? []) as RawTimeLogRow[]
+  const logs = (logsData ?? []) as RawTimeLogRow[]
 
   const tzById = Object.fromEntries(profiles.map(p => [p.id, resolveTimezone(p.timezone)]))
 
@@ -184,19 +192,12 @@ export async function getEmployeePerformanceReport(
   from: string,
   to:   string,
 ): Promise<PerformanceRow[]> {
-  const profile = await requireRole(['admin', 'manager'])
-  const orgId = requireOrgId(profile)
-  const supabase = await createClient()
+  const { supabase, orgId, people: profiles } = await activeTeamProfiles()
   const today    = await viewerToday()
   const toEnd    = `${to}T23:59:59.999Z`
+  const ids      = profiles.map((p) => p.id)
 
-  const [profilesRes, assignedRes, completedRes, overdueRes, hoursRes] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, full_name, employee_code, timezone')
-      .eq('status', 'active')
-      .eq('organization_id', orgId)
-      .order('full_name'),
+  const [assignedRes, completedRes, overdueRes, hoursRes] = await Promise.all([
     supabase.from('tactics')
       .select('assigned_to')
       .eq('organization_id', orgId)
@@ -213,14 +214,16 @@ export async function getEmployeePerformanceReport(
       .lt('due_date', today)
       .neq('status', 'done')
       .neq('status', 'archived'),
-    supabase.from('time_logs')
-      .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
-      .eq('organization_id', orgId)
-      .gte('log_date', from)
-      .lte('log_date', to),
+    ids.length
+      ? supabase.from('time_logs')
+          .select('employee_id, log_date, clock_in_at, clock_out_at, duration_minutes')
+          .eq('organization_id', orgId)
+          .gte('log_date', from)
+          .lte('log_date', to)
+          .in('employee_id', ids)
+      : Promise.resolve({ data: [] as RawTimeLogRow[] }),
   ])
 
-  const profiles  = (profilesRes.data  ?? []) as RawProfile[]
   const assigned  = (assignedRes.data  ?? []) as { assigned_to: string }[]
   const completed = (completedRes.data ?? []) as { assigned_to: string; created_at: string; updated_at: string }[]
   const overdue   = (overdueRes.data   ?? []) as { assigned_to: string }[]

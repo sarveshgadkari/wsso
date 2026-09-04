@@ -80,21 +80,36 @@ const composeSchema = z.object({
 })
 
 async function getManagedTeamMemberIds(managerId: string): Promise<string[]> {
+  const { data: me } = await supabaseAdmin
+    .from('profiles')
+    .select('id, team_id, organization_id')
+    .eq('id', managerId)
+    .maybeSingle()
+
   const { data: teams } = await supabaseAdmin
     .from('teams')
     .select('id')
     .eq('manager_id', managerId)
 
-  const teamIds = (teams ?? []).map(t => t.id)
-  if (teamIds.length === 0) return []
+  const teamIds = Array.from(new Set([
+    ...(teams ?? []).map((t) => t.id),
+    ...(me?.team_id ? [me.team_id] : []),
+  ]))
 
-  const { data: members } = await supabaseAdmin
+  const parts = [`manager_id.eq.${managerId}`]
+  if (teamIds.length > 0) parts.push(`team_id.in.(${teamIds.join(',')})`)
+
+  let query = supabaseAdmin
     .from('profiles')
     .select('id')
-    .in('team_id', teamIds)
     .eq('status', 'active')
+    .or(parts.join(','))
+  if (me?.organization_id) {
+    query = query.eq('organization_id', me.organization_id)
+  }
 
-  return (members ?? []).map(m => m.id)
+  const { data: members } = await query
+  return (members ?? []).map((m) => m.id).filter((id) => id !== managerId)
 }
 
 type SenderInfo = Pick<Profile, 'id' | 'full_name' | 'employee_code' | 'role'>

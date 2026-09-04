@@ -8,6 +8,7 @@ import { ops } from '@/lib/workspace/db'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
 import { todayInTimezone, startOfWeekInTimezone } from '@/lib/utils/dates'
 import { resolveTimezone } from '@/lib/utils/timezones'
+import { applyManagerProfileFilter, listVisibleProfileIds, managerScope } from '@/lib/saas/team-scope'
 import type { ComplianceRecord, LeadFollowUp, RecurringJob, TacticChecklistItem } from '@/lib/workspace/rows'
 
 function revalidateOps() {
@@ -302,7 +303,12 @@ export async function listComplianceRecords(): Promise<ComplianceRecord[]> {
     .eq('organization_id', profile.organization_id)
     .order('expires_on', { ascending: true, nullsFirst: false })
   if (error) return []
-  return (data ?? []) as ComplianceRecord[]
+  const records = (data ?? []) as ComplianceRecord[]
+  if (profile.role !== 'manager') return records
+  const allowed = await listVisibleProfileIds(profile)
+  if (!allowed) return records
+  const allowedSet = new Set(allowed)
+  return records.filter((r) => !r.profile_id || allowedSet.has(r.profile_id))
 }
 
 export async function saveRecurringJob(input: Omit<RecurringJob, 'id' | 'last_run_on'> & { id?: string }) {
@@ -458,11 +464,15 @@ export async function getPayrollExport(from: string, to: string): Promise<Payrol
   const otCap = settings.time.overtimeWeeklyMinutes
 
   const supabase = await createClient()
-  const { data: employees } = await supabase
-    .from('profiles')
-    .select('id, employee_code, full_name, timezone, hourly_rate_cents')
-    .eq('status', 'active')
-    .order('full_name')
+  const scope = await managerScope(profile)
+  const { data: employees } = await applyManagerProfileFilter(
+    supabase
+      .from('profiles')
+      .select('id, employee_code, full_name, timezone, hourly_rate_cents')
+      .eq('status', 'active')
+      .order('full_name'),
+    scope,
+  )
 
   const ids = (employees ?? []).map((e) => e.id)
   if (!ids.length) return []
@@ -527,6 +537,7 @@ export async function listWhoIsWorking(): Promise<LiveWorker[]> {
   const profile = await requireProfile()
   if (!['admin', 'manager'].includes(profile.role)) return []
   const supabase = await createClient()
+  const allowedIds = await listVisibleProfileIds(profile)
   const { data } = await supabase
     .from('time_logs')
     .select(`
@@ -536,10 +547,13 @@ export async function listWhoIsWorking(): Promise<LiveWorker[]> {
     .is('clock_out_at', null)
     .order('clock_in_at')
 
+  const allowed = allowedIds ? new Set(allowedIds) : null
+
   return (data ?? [])
     .map((row) => {
       const emp = row.employee as unknown as LiveWorker & { status?: string } | null
       if (!emp || emp.status === 'inactive') return null
+      if (allowed && !allowed.has(emp.id)) return null
       return {
         id: emp.id,
         full_name: emp.full_name,

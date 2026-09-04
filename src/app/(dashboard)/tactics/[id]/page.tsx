@@ -10,6 +10,7 @@ import { listChecklistTemplates } from '@/lib/actions/workspace'
 import { getTacticJobCost, listTacticChecklist } from '@/lib/actions/ops'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
 import { requireOrgId } from '@/lib/saas/tenant'
+import { applyManagerProfileFilter, managerScope } from '@/lib/saas/team-scope'
 
 interface Props {
   params: { id: string }
@@ -25,6 +26,7 @@ export default async function TacticDetailPage({ params }: Props) {
   const supabase = await createClient()
   const isAdmin   = profile.role === 'admin'
   const isManager = profile.role === 'manager'
+  const scope     = await managerScope(profile)
 
   const [tacticRes, logsRes, employeesRes, projectsRes] = await Promise.all([
     supabase
@@ -50,12 +52,15 @@ export default async function TacticDetailPage({ params }: Props) {
       .order('created_at', { ascending: false }),
 
     (isAdmin || isManager)
-      ? supabase
-          .from('profiles')
-          .select('id, full_name, employee_code')
-          .eq('status', 'active')
-          .eq('organization_id', orgId)
-          .order('full_name')
+      ? applyManagerProfileFilter(
+          supabase
+            .from('profiles')
+            .select('id, full_name, employee_code')
+            .eq('status', 'active')
+            .eq('organization_id', orgId)
+            .order('full_name'),
+          scope,
+        )
       : Promise.resolve({ data: [] as { id: string; full_name: string; employee_code: string }[] }),
 
     supabase

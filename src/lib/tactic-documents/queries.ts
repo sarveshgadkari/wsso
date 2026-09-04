@@ -15,13 +15,38 @@ export interface TacticDocListRow {
   project:         { name: string; code: string } | null
 }
 
-async function directReportIds(managerId: string): Promise<string[]> {
+async function orgMemberIds(orgId: string | null): Promise<string[]> {
+  if (!orgId) return []
   const { data } = await supabaseAdmin
     .from('profiles')
     .select('id')
-    .eq('manager_id', managerId)
+    .eq('organization_id', orgId)
+  return (data ?? []).map((p) => p.id)
+}
+
+async function managedMemberIds(profile: Profile): Promise<string[]> {
+  const { data: teams } = await supabaseAdmin
+    .from('teams')
+    .select('id')
+    .eq('manager_id', profile.id)
+  const teamIds = Array.from(new Set([
+    ...(teams ?? []).map((t) => t.id),
+    ...(profile.team_id ? [profile.team_id] : []),
+  ]))
+  const parts = [`manager_id.eq.${profile.id}`]
+  if (teamIds.length > 0) parts.push(`team_id.in.(${teamIds.join(',')})`)
+
+  let query = supabaseAdmin
+    .from('profiles')
+    .select('id')
     .eq('status', 'active')
-  return (data ?? []).map(p => p.id)
+    .or(parts.join(','))
+  if (profile.organization_id) {
+    query = query.eq('organization_id', profile.organization_id)
+  }
+
+  const { data } = await query
+  return (data ?? []).map((p) => p.id).filter((id) => id !== profile.id)
 }
 
 async function sharedTacticDocumentIds(userId: string): Promise<string[]> {
@@ -37,7 +62,7 @@ export async function visibleTacticDocumentIds(profile: Profile): Promise<string
   if (profile.role === 'admin' || profile.role === 'director') return 'all'
 
   if (profile.role === 'manager') {
-    const reportIds = await directReportIds(profile.id)
+    const reportIds = await managedMemberIds(profile)
     const sharedIds = await sharedTacticDocumentIds(profile.id)
     const ids = new Set<string>(sharedIds)
 
@@ -74,16 +99,19 @@ export async function visibleTacticDocumentIds(profile: Profile): Promise<string
 export async function countPendingTacticDocuments(profile: Profile): Promise<number> {
   try {
     if (profile.role === 'admin' || profile.role === 'director') {
+      const members = await orgMemberIds(profile.organization_id)
+      if (!members.length) return 0
       const { count, error } = await supabaseAdmin
         .from('tactic_documents')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'submitted')
+        .in('created_by', members)
       if (error) return 0
       return count ?? 0
     }
 
     if (profile.role === 'manager') {
-      const reportIds = await directReportIds(profile.id)
+      const reportIds = await managedMemberIds(profile)
       if (!reportIds.length) return 0
       const { count, error } = await supabaseAdmin
         .from('tactic_documents')
@@ -120,6 +148,10 @@ export async function fetchTacticDocumentsForProfile(
     if (visible !== 'all') {
       if (!visible.length) return []
       query = query.in('id', visible)
+    } else {
+      const members = await orgMemberIds(profile.organization_id)
+      if (!members.length) return []
+      query = query.in('created_by', members)
     }
 
     const { data, error } = await query
@@ -135,10 +167,13 @@ export async function canViewTacticDocument(
   docId: string,
   createdBy: string,
 ): Promise<boolean> {
-  if (profile.role === 'admin' || profile.role === 'director') return true
+  if (profile.role === 'admin' || profile.role === 'director') {
+    const members = await orgMemberIds(profile.organization_id)
+    return members.includes(createdBy)
+  }
   if (createdBy === profile.id) return true
   if (profile.role === 'manager') {
-    const reports = await directReportIds(profile.id)
+    const reports = await managedMemberIds(profile)
     if (reports.includes(createdBy)) return true
   }
   const shared = await sharedTacticDocumentIds(profile.id)
