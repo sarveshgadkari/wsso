@@ -127,6 +127,7 @@ export async function middleware(request: NextRequest) {
         pathname === '/dashboard' ||
         pathname.startsWith('/auth/') ||
         pathname.startsWith('/api/billing/') ||
+        pathname.startsWith('/api/help/') ||
         (role === 'admin' && (pathname === '/settings/billing' || pathname.startsWith('/settings/billing')))
 
       if (paymentDue && !allowedWhileLocked && !isPublic(pathname)) {

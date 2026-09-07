@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { ToastContainer } from '@/components/ui/Toast'
 import { StickyNotesLayer } from '@/components/sticky-notes/StickyNotesLayer'
+import { HelpWidget } from '@/components/help/HelpWidget'
 import { redirect } from 'next/navigation'
 import { orgNeedsPayment } from '@/lib/saas/plans'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
@@ -47,6 +48,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </div>
 
+      <HelpWidget />
       <ToastContainer />
     </div>
   )

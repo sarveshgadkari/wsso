@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import { CircleHelp, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -11,14 +11,20 @@ import type { Profile } from '@/lib/types'
 // Longer prefixes must appear first after sorting so they win over shorter ones.
 const PAGE_TITLES: [string, string][] = [
   ['/dashboard',          'Dashboard'],
-  ['/tactics',            'Tactics'],
+  ['/my-work',            'My Work'],
+  ['/tactic-documents',   'TACTICs'],
+  ['/tactics',            'Work Orders'],
   ['/kanban',             'Kanban Board'],
   ['/employees',          'Employees'],
   ['/companies',          'Companies'],
   ['/projects',           'Projects'],
   ['/clients',            'Clients'],
+  ['/crm',                'CRM'],
+  ['/my-leads',           'My Leads'],
   ['/time/team',          'Team Time'],
   ['/time',               'My Time'],
+  ['/leave/team',         'Team Leave'],
+  ['/leave',              'My Leave'],
   ['/training',           'Training'],
   ['/documents',          'Documents'],
   ['/reports',            'Reports'],
@@ -68,6 +74,17 @@ export function Topbar({ profile, notifCount, hideNotifications = false }: Topba
 
       {/* Right-side actions */}
       <div className="flex items-center gap-5">
+        {profile.role !== 'super_admin' && (
+          <button
+            type="button"
+            aria-label="Open WSSO help"
+            title="Page help"
+            onClick={() => window.dispatchEvent(new CustomEvent('wsso-open-help', { detail: { tab: 'guide' } }))}
+            className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+          >
+            <CircleHelp className="h-4 w-4" />
+          </button>
+        )}
         <ThemeToggle />
 
         {/* Notifications bell — live dropdown + Realtime (workspace users only) */}
