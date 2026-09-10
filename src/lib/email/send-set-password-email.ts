@@ -50,10 +50,29 @@ function brevoConfigured(): boolean {
   return !!(process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASSWORD)
 }
 
-async function sendViaBrevo(
-  params: SetPasswordEmailParams,
-  link: string,
-): Promise<SetPasswordEmailResult> {
+function resetPasswordHtml(email: string, link: string): string {
+  return `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#171717">
+      <h1 style="font-size:20px;margin-bottom:8px">Reset your WSSO password</h1>
+      <p>We received a request to reset the password for <strong>${email}</strong>.</p>
+      <p>Click the button below to choose a new password. If you did not request this, you can ignore this email.</p>
+      <p style="margin:28px 0">
+        <a href="${link}" style="background:#2563eb;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">
+          Reset password
+        </a>
+      </p>
+      <p style="font-size:12px;color:#737373">If the button does not work, copy and paste this link into your browser:</p>
+      <p style="font-size:12px;color:#737373;word-break:break-all">${link}</p>
+      <p style="font-size:12px;color:#737373;margin-top:24px">This link expires after about an hour.</p>
+    </div>
+  `.trim()
+}
+
+async function sendBrevoMail(opts: {
+  to: string
+  subject: string
+  html: string
+}): Promise<SetPasswordEmailResult> {
   if (!brevoConfigured()) {
     return {
       sent:   false,
@@ -79,15 +98,45 @@ async function sendViaBrevo(
   try {
     await transport.sendMail({
       from,
-      to:      params.email,
-      subject: 'Set up your WSSO account',
-      html:    welcomeHtml(params, link),
+      to:      opts.to,
+      subject: opts.subject,
+      html:    opts.html,
     })
     return { sent: true, method: 'brevo' }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Brevo SMTP send failed'
     return { sent: false, method: 'brevo', error: message }
   }
+}
+
+async function sendViaBrevo(
+  params: SetPasswordEmailParams,
+  link: string,
+): Promise<SetPasswordEmailResult> {
+  return sendBrevoMail({
+    to:      params.email,
+    subject: 'Set up your WSSO account',
+    html:    welcomeHtml(params, link),
+  })
+}
+
+export async function sendPasswordResetEmail(params: {
+  email: string
+  link: string
+}): Promise<SetPasswordEmailResult> {
+  if (!brevoConfigured()) {
+    return {
+      sent:   false,
+      method: 'none',
+      error:  'Brevo SMTP not configured — add BREVO_SMTP_USER and BREVO_SMTP_PASSWORD in Vercel',
+    }
+  }
+
+  return sendBrevoMail({
+    to:      params.email,
+    subject: 'Reset your WSSO password',
+    html:    resetPasswordHtml(params.email, params.link),
+  })
 }
 
 async function sendViaSupabase(params: SetPasswordEmailParams): Promise<SetPasswordEmailResult> {

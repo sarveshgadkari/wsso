@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { requestPasswordReset } from '@/lib/actions/auth'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { CheckCircle } from 'lucide-react'
@@ -28,15 +28,10 @@ export function ForgotPasswordForm() {
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
   const onSubmit = async (values: FormValues) => {
-    const supabase = createClient()
+    const result = await requestPasswordReset(values.email)
 
-    const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
-      // After verifying the token, land the user on the reset-password page
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    })
-
-    if (error) {
-      setError('root', { message: error.message })
+    if (result.error) {
+      setError('root', { message: result.error })
       return
     }
 
@@ -50,8 +45,8 @@ export function ForgotPasswordForm() {
         <div>
           <p className="text-sm font-medium text-neutral-800">Check your inbox</p>
           <p className="mt-1 text-sm text-neutral-500">
-            We sent a reset link to <strong>{getValues('email')}</strong>.
-            It expires in 1 hour.
+            If an account exists for <strong>{getValues('email')}</strong>, we sent a reset link.
+            It expires in 1 hour. Check spam if you do not see it.
           </p>
         </div>
         <Link href="/login" className="text-sm text-primary-600 hover:underline">

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { LoginForm } from '@/components/auth/LoginForm'
 
 export const metadata: Metadata = { title: 'Sign In — WSSO' }
@@ -36,6 +37,16 @@ export default function LoginPage({ searchParams }: Props) {
       {searchParams.error === 'no_workspace' && (
         <div className="mb-4 rounded-md border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700">
           Your account is not attached to a workspace. Contact support.
+        </div>
+      )}
+
+      {searchParams.error === 'link_expired' && (
+        <div className="mb-4 rounded-md border border-warning-500/30 bg-warning-50 px-4 py-3 text-sm text-warning-700">
+          Your reset link has expired or is invalid.{' '}
+          <Link href="/forgot-password" className="font-medium underline">
+            Request a new one
+          </Link>
+          .
         </div>
       )}
 

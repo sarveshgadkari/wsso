@@ -1,8 +1,10 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
@@ -26,6 +28,8 @@ type FormValues = z.infer<typeof schema>
 
 export function ResetPasswordForm() {
   const router = useRouter()
+  const [ready, setReady] = useState(false)
+  const [hasSession, setHasSession] = useState(false)
 
   const {
     register,
@@ -33,6 +37,42 @@ export function ResetPasswordForm() {
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
+
+  useEffect(() => {
+    const supabase = createClient()
+    let cancelled = false
+    let found = false
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled || !session) return
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        found = true
+        setHasSession(true)
+        setReady(true)
+      }
+    })
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return
+      if (session) {
+        found = true
+        setHasSession(true)
+        setReady(true)
+        return
+      }
+      // Hash tokens from implicit-flow emails arrive after the first paint
+      window.setTimeout(() => {
+        if (cancelled || found) return
+        setHasSession(false)
+        setReady(true)
+      }, 400)
+    })
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
+  }, [])
 
   const onSubmit = async (values: FormValues) => {
     const supabase = createClient()
@@ -48,6 +88,26 @@ export function ResetPasswordForm() {
 
     router.push('/dashboard')
     router.refresh()
+  }
+
+  if (!ready) {
+    return (
+      <p className="text-center text-sm text-neutral-500">Checking your reset link…</p>
+    )
+  }
+
+  if (!hasSession) {
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <p className="text-sm font-medium text-neutral-800">This reset link is invalid or has expired.</p>
+        <p className="text-sm text-neutral-500">
+          Request a new one from the login page. Links expire after about an hour.
+        </p>
+        <Link href="/forgot-password" className="text-sm text-primary-600 hover:underline">
+          Request a new reset link
+        </Link>
+      </div>
+    )
   }
 
   return (
