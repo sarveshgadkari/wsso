@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, UserX, UserCheck, AlertTriangle, LogOut } from 'lucide-react'
+import { ArrowLeft, UserX, UserCheck, AlertTriangle, LogOut, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -16,6 +16,7 @@ import { updateEmployeeProfile, setEmployeeStatus } from '@/lib/actions/employee
 import { updateEmployeeOrg } from '@/lib/actions/org'
 import { useToast } from '@/lib/store/toast'
 import { ForceClockOutDialog } from '@/components/time/ForceClockOutDialog'
+import { DeleteEmployeeDialog } from './DeleteEmployeeDialog'
 import type { Profile, Team, Company, UserRole } from '@/lib/types'
 import { TIMEZONE_OPTIONS } from '@/lib/utils/timezones'
 
@@ -31,6 +32,7 @@ interface Props {
   companies:   Pick<Company, 'id' | 'name' | 'code'>[]
   managers:    Pick<Profile, 'id' | 'full_name' | 'employee_code'>[]
   isAdmin:     boolean
+  viewerId:    string
   openSession: { id: string; clock_in_at: string } | null
 }
 
@@ -51,12 +53,13 @@ const ROLE_VARIANT: Record<UserRole, 'danger' | 'purple' | 'info' | 'default'> =
   employee: 'default',
 }
 
-export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, openSession }: Props) {
+export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, viewerId, openSession }: Props) {
   const router = useRouter()
   const toast  = useToast()
 
   const [emp, setEmp] = useState<EmployeeDetailData>(employee)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
+  const [deleteOpen,     setDeleteOpen]     = useState(false)
   const [statusBusy,     setStatusBusy]     = useState(false)
   const [forceOpen,      setForceOpen]      = useState(false)
 
@@ -162,7 +165,7 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {openSession && (
               <Button variant="secondary" size="sm" onClick={() => setForceOpen(true)}>
                 <LogOut className="h-3.5 w-3.5" />
@@ -178,6 +181,17 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
                 ? <><UserX  className="h-3.5 w-3.5" /> Deactivate</>
                 : <><UserCheck className="h-3.5 w-3.5" /> Reactivate</>}
             </Button>
+            {emp.id !== viewerId && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="border-danger-300 text-danger-700 hover:bg-danger-50"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete profile
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -186,7 +200,7 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Profile section */}
         <div className="card p-5">
-          <h3 className="mb-4 text-sm font-semibold text-neutral-800">Profile information</h3>
+          <h3 className="mb-4 text-sm font-semibold text-neutral-800">Edit profile</h3>
 
           <form onSubmit={handleSubmit(onProfileSave)} noValidate className="flex flex-col gap-4">
             {errors.root && (
@@ -402,6 +416,20 @@ export function EmployeeDetail({ employee, teams, companies, managers, isAdmin, 
           </Button>
         </DialogFooter>
       </Dialog>
+
+      {isAdmin && emp.id !== viewerId && (
+        <DeleteEmployeeDialog
+          open={deleteOpen}
+          employeeId={emp.id}
+          fullName={emp.full_name}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            toast.success('Profile deleted')
+            router.push('/employees')
+            router.refresh()
+          }}
+        />
+      )}
     </div>
   )
 }

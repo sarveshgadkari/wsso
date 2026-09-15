@@ -301,13 +301,14 @@ export const HELP_FAQS: HelpFaq[] = [
       'How do I send a password email?',
       'What roles can I assign?',
       'How do I deactivate someone?',
+      'How do I delete a profile?',
       'How do I change someone role?',
       'How do I assign a manager?',
       'How do I set timezone for an employee?',
       'Why can I not delete a manager?',
     ],
     answer:
-      'Admins create people on Employees, pick director, manager, or employee, assign companies, and send the set-password email. Managers see their team, not the whole company. Deactivate so they cannot sign in. You cannot promote someone to workspace admin from this form. If a manager still owns a team, reassign the team before changing their role.',
+      'Admins create people on Employees, pick director, manager, or employee, assign companies, and send the set-password email. Open a person to edit their profile. Delete profile removes the account permanently; deactivate if you only want to block sign-in. Managers see their team, not the whole company. You cannot promote someone to workspace admin from the create form. If a manager still owns a team, reassign the team before changing their role or deleting them.',
   },
   {
     articleId: 'companies',

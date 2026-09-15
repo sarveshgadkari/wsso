@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useRouter } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
 import { Dialog, DialogFooter } from '@/components/ui/Dialog'
 import { Input } from '@/components/ui/Input'
@@ -38,6 +39,7 @@ interface Props {
 }
 
 interface SuccessState {
+  id:                string
   employee_code:     string
   full_name:         string
   email_sent:        boolean
@@ -49,6 +51,7 @@ export function CreateEmployeeDialog({
   open, onClose, onCreated, teams, managers, companies,
 }: Props) {
   const toast = useToast()
+  const router = useRouter()
   const [success, setSuccess]         = useState<SuccessState | null>(null)
   const [, setSelectedTeamId] = useState('')
 
@@ -110,6 +113,7 @@ export function CreateEmployeeDialog({
     }
 
     setSuccess({
+      id:                body.profile.id,
       employee_code:     body.profile.employee_code,
       full_name:         body.profile.full_name,
       email_sent:        body.email_sent === true,
@@ -304,7 +308,13 @@ export function CreateEmployeeDialog({
 
       {success && (
         <DialogFooter>
-          <Button onClick={handleClose}>Done</Button>
+          <Button variant="secondary" onClick={handleClose}>Done</Button>
+          <Button onClick={() => {
+            handleClose()
+            router.push(`/employees/${success.id}`)
+          }}>
+            Edit profile
+          </Button>
         </DialogFooter>
       )}
     </Dialog>

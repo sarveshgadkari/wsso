@@ -71,6 +71,7 @@ export default async function EmployeesPage() {
         companies={companies}
         managers={managers}
         isAdmin={profile.role === 'admin'}
+        viewerId={profile.id}
       />
     </div>
   )

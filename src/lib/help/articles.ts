@@ -324,13 +324,14 @@ export const HELP_ARTICLES: HelpArticle[] = [
     steps: [
       'Admin: create an employee, pick a role (director, manager, employee), send the set-password email.',
       'Manager: view and update your team; you cannot create workspace admins or change billing.',
-      'Open a person for profile, companies, timezone, and activity.',
+      'Open a person to edit profile, companies, timezone, and activity. Use Delete profile to remove the account.',
       'Inactive people cannot sign in.',
     ],
     suggestedQuestions: [
       'How do I invite a new employee?',
       'What roles can I assign?',
       'How do I deactivate someone?',
+      'How do I delete a profile?',
     ],
     body:
       'Employees directory. Admin creates users (director/manager/employee), sends password link, assigns companies/teams. Manager sees team-scoped people. ' +

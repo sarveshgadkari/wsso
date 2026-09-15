@@ -78,6 +78,7 @@ export default async function EmployeeDetailPage({ params }: Props) {
       companies={companies}
       managers={managers}
       isAdmin={viewer.role === 'admin'}
+      viewerId={viewer.id}
       openSession={openSessionRes.data ?? null}
     />
   )

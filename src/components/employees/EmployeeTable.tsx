@@ -2,11 +2,12 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, Plus, UserX } from 'lucide-react'
+import { Pencil, Plus, Trash2, UserX } from 'lucide-react'
 import { DataTable, type TableColumn } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { CreateEmployeeDialog } from './CreateEmployeeDialog'
+import { DeleteEmployeeDialog } from './DeleteEmployeeDialog'
 import type { Profile, Company, Team, UserRole } from '@/lib/types'
 
 export interface EmployeeListRow extends Omit<Profile, 'team_id' | 'manager_id'> {
@@ -35,15 +36,17 @@ interface Props {
   companies:        CompanyOption[]
   managers:         ManagerOption[]
   isAdmin:          boolean
+  viewerId:         string
 }
 
 export function EmployeeTable({
-  initialEmployees, teams, companies, managers, isAdmin,
+  initialEmployees, teams, companies, managers, isAdmin, viewerId,
 }: Props) {
   const router = useRouter()
 
   const [employees, setEmployees]   = useState<EmployeeListRow[]>(initialEmployees)
   const [createOpen, setCreateOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeListRow | null>(null)
   const [roleFilter,   setRoleFilter]   = useState<string>('all')
   const [teamFilter,   setTeamFilter]   = useState<string>('all')
   const [companyFilter, setCompanyFilter] = useState<string>('all')
@@ -157,10 +160,23 @@ export function EmployeeTable({
       header: '',
       enableSorting: false,
       cell: ({ row: { original: e } }) => (
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/employees/${e.id}`)}>
-          <Eye className="h-3.5 w-3.5" />
-          View
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/employees/${e.id}`)}>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+          {isAdmin && e.id !== viewerId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-danger-600 hover:bg-danger-50 hover:text-danger-700"
+              onClick={() => setDeleteTarget(e)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          )}
+        </div>
       ),
     },
   ]
@@ -235,12 +251,26 @@ export function EmployeeTable({
               { ...profile, team: null, manager: null, companyIds: [] },
               ...prev,
             ])
-            setCreateOpen(false)
             router.refresh()
           }}
           teams={teams}
           managers={managers}
           companies={companies}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteEmployeeDialog
+          open
+          employeeId={deleteTarget.id}
+          fullName={deleteTarget.full_name}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            const id = deleteTarget.id
+            setEmployees((prev) => prev.filter((row) => row.id !== id))
+            setDeleteTarget(null)
+            router.refresh()
+          }}
         />
       )}
     </>
