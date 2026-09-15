@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import {
+  canRecordAudio,
   getSpeechRecognitionCtor,
   preloadVoices,
   speakText,
@@ -15,6 +16,8 @@ import {
   voiceSupported,
   type SpeechRecognitionLike,
 } from '@/lib/help/speech'
+import { micPermissionMessage, startMicRecording, type MicRecording } from '@/lib/help/mic-record'
+import { transcribeAudio } from '@/lib/help/transcribe'
 import type { HelpAllowedPage, HelpPageContext } from '@/lib/help/types'
 
 type Tab = 'guide' | 'ask'
@@ -42,6 +45,7 @@ export function HelpWidget() {
   const [sending, setSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   const [listening, setListening] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [interim, setInterim] = useState('')
   const [speaking, setSpeaking] = useState(false)
   const [speakReplies, setSpeakReplies] = useState(true)
@@ -49,6 +53,7 @@ export function HelpWidget() {
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const recRef = useRef<SpeechRecognitionLike | null>(null)
+  const mediaRef = useRef<MicRecording | null>(null)
   const speakRepliesRef = useRef(true)
   const messagesRef = useRef<ChatMsg[]>([])
   const sendingRef = useRef(false)
@@ -96,7 +101,10 @@ export function HelpWidget() {
     setTab('guide')
     stopSpeaking()
     setSpeaking(false)
-    recRef.current?.abort()
+    recRef.current?.abort?.()
+    recRef.current = null
+    mediaRef.current?.cancel()
+    mediaRef.current = null
     setListening(false)
     setInterim('')
   }, [pathname, load])
@@ -136,7 +144,10 @@ export function HelpWidget() {
     if (!open) {
       stopSpeaking()
       setSpeaking(false)
-      recRef.current?.abort()
+      recRef.current?.abort?.()
+      recRef.current = null
+      mediaRef.current?.cancel()
+      mediaRef.current = null
       setListening(false)
     }
   }, [open])
@@ -195,16 +206,55 @@ export function HelpWidget() {
 
   const stopListen = useCallback(() => {
     recRef.current?.stop()
+    recRef.current = null
+    mediaRef.current?.stop()
+    mediaRef.current = null
   }, [])
 
-  const startListen = useCallback(() => {
-    const Ctor = getSpeechRecognitionCtor()
-    if (!Ctor) {
-      setChatError('Voice input works in Chrome or Edge. You can still type.')
-      setTab('ask')
+  const startMediaFallback = useCallback(async () => {
+    if (!canRecordAudio()) {
+      setChatError('Allow the microphone to ask with voice, or type your question.')
       return
     }
-    if (listening) {
+
+    try {
+      const rec = await startMicRecording({
+        onBlob: async (blob) => {
+          mediaRef.current = null
+          setListening(false)
+          if (blob.size < 800) {
+            setChatError('Could not hear that. Try again, or type.')
+            return
+          }
+          setTranscribing(true)
+          setInterim('')
+          try {
+            const text = await transcribeAudio(blob)
+            if (text) void send(text, { fromVoice: true })
+            else setChatError('Could not hear that. Try again, or type.')
+          } catch {
+            setChatError('Could not transcribe that. Type your question instead.')
+          } finally {
+            setTranscribing(false)
+          }
+        },
+        onError: (message) => {
+          mediaRef.current = null
+          setListening(false)
+          setChatError(message)
+        },
+      })
+      mediaRef.current = rec
+      setListening(true)
+      setInterim('')
+    } catch (err) {
+      setListening(false)
+      setChatError(micPermissionMessage(err))
+    }
+  }, [send])
+
+  const startListen = useCallback(() => {
+    if (listening || transcribing) {
       stopListen()
       return
     }
@@ -213,6 +263,12 @@ export function HelpWidget() {
     setSpeaking(false)
     setChatError(null)
     setTab('ask')
+
+    const Ctor = getSpeechRecognitionCtor()
+    if (!Ctor) {
+      void startMediaFallback()
+      return
+    }
 
     const rec = new Ctor()
     rec.lang = 'en-US'
@@ -240,9 +296,16 @@ export function HelpWidget() {
     rec.onerror = (ev) => {
       setListening(false)
       setInterim('')
+      recRef.current = null
       if (ev.error === 'not-allowed') {
         setChatError('Microphone permission was blocked. Allow the mic, or type your question.')
-      } else if (ev.error !== 'aborted' && ev.error !== 'no-speech') {
+        return
+      }
+      if (ev.error === 'network' || ev.error === 'service-not-allowed' || ev.error === 'audio-capture') {
+        void startMediaFallback()
+        return
+      }
+      if (ev.error !== 'aborted' && ev.error !== 'no-speech') {
         setChatError('Could not hear that. Try again, or type.')
       }
     }
@@ -257,10 +320,10 @@ export function HelpWidget() {
       setListening(true)
       setInterim('')
     } catch {
-      setChatError('Could not start the microphone.')
-      setListening(false)
+      recRef.current = null
+      void startMediaFallback()
     }
-  }, [listening, send, stopListen])
+  }, [listening, transcribing, send, startMediaFallback, stopListen])
 
   const toggleSpeakReplies = () => {
     const next = !speakReplies
@@ -431,7 +494,12 @@ export function HelpWidget() {
                 {listening && (
                   <p className="flex items-center gap-2 text-xs text-primary-700">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-danger-500" />
-                    Listening… {interim || 'say your WSSO question'}
+                    Listening… {interim || 'tap the mic again when you finish'}
+                  </p>
+                )}
+                {transcribing && (
+                  <p className="flex items-center gap-2 text-xs text-neutral-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Hearing that…
                   </p>
                 )}
                 {sending && (
@@ -471,15 +539,15 @@ export function HelpWidget() {
                     }}
                     rows={2}
                     maxLength={1000}
-                    placeholder={listening ? 'Listening…' : 'Type or use the mic…'}
+                    placeholder={listening ? 'Listening…' : transcribing ? 'Hearing that…' : 'Type or use the mic…'}
                     className="min-h-[2.5rem] flex-1 resize-none rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                   <button
                     type="button"
                     onClick={startListen}
-                    disabled={sending}
+                    disabled={sending || transcribing}
                     aria-label={listening ? 'Stop listening' : 'Ask with voice'}
-                    title={voice.listen ? (listening ? 'Stop' : 'Ask with voice') : 'Voice input needs Chrome or Edge'}
+                    title={listening ? 'Stop' : 'Ask with voice'}
                     className={cn(
                       'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors',
                       listening
@@ -490,7 +558,7 @@ export function HelpWidget() {
                   >
                     {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </button>
-                  <Button type="submit" size="sm" disabled={sending || listening || !draft.trim()} aria-label="Send">
+                  <Button type="submit" size="sm" disabled={sending || listening || transcribing || !draft.trim()} aria-label="Send">
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>

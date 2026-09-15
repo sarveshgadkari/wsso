@@ -53,7 +53,7 @@ Everyone signs in with their work email. What you see in the sidebar depends on 
 
 ### 2.1 Signing in
 
-1. Open your WSSO URL in a web browser (Chrome, Edge, or Firefox recommended).
+1. Open your WSSO URL in a web browser (Chrome, Edge, Firefox, or Safari).
 2. Go to the **Login** page.
 3. Enter your **email address** and **password**.
 4. Click **Sign in**.

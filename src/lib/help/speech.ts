@@ -40,10 +40,15 @@ export function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null
 }
 
+export function canRecordAudio(): boolean {
+  if (typeof window === 'undefined') return false
+  return Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined'
+}
+
 export function voiceSupported(): { listen: boolean; speak: boolean } {
   if (typeof window === 'undefined') return { listen: false, speak: false }
   return {
-    listen: Boolean(getSpeechRecognitionCtor()),
+    listen: Boolean(getSpeechRecognitionCtor()) || canRecordAudio(),
     speak: 'speechSynthesis' in window,
   }
 }
