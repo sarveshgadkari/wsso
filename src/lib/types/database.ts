@@ -1388,6 +1388,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          organization_id?: string
           id?: string
           title: string
           description?: string | null
@@ -1406,6 +1407,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          organization_id?: string
           id?: string
           title?: string
           description?: string | null
@@ -1442,6 +1444,7 @@ export type Database = {
           created_at: string
         }
         Insert: {
+          organization_id?: string
           id?: string
           module_id: string
           question_text: string
@@ -1450,6 +1453,7 @@ export type Database = {
           created_at?: string
         }
         Update: {
+          organization_id?: string
           id?: string
           module_id?: string
           question_text?: string

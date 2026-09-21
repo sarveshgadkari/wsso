@@ -477,6 +477,7 @@ export async function createTrainingModule(formData: FormData) {
       pass_percent: passPercent,
       is_published: isPublished,
       created_by: profile.id,
+      organization_id: profile.organization_id!,
     })
     .select()
     .single()
@@ -625,7 +626,7 @@ export async function reorderTrainingModules(orderedIds: string[]) {
 }
 
 export async function saveTrainingQuestions(moduleId: string, questions: QuestionInput[]) {
-  await requireRole(['admin'])
+  const profile = await requireRole(['admin'])
 
   for (const q of questions) {
     if (!q.question_text.trim()) throw new Error('Each question needs text')
@@ -658,6 +659,7 @@ export async function saveTrainingQuestions(moduleId: string, questions: Questio
         question_text: q.question_text.trim(),
         options,
         order_no: i + 1,
+        organization_id: profile.organization_id!,
       }
     })
     const { error } = await supabaseAdmin.from('training_questions').insert(rows)
