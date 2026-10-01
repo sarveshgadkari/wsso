@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard,
   ClipboardList,
+  ClipboardCheck,
   Kanban,
   Users,
   Building2,
@@ -82,6 +83,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Time',
     items: [
       { label: 'My Time',   href: '/time',      icon: Clock, feature: 'time' },
+      { label: 'Daily Work', href: '/daily-work', icon: ClipboardCheck, feature: 'dailyWork' },
       { label: 'Team Time', href: '/time/team', icon: CalendarClock, roles: ['admin', 'manager'], feature: 'time' },
       { label: 'My Leave',   href: '/leave',      icon: CalendarOff, feature: 'leave' },
       { label: 'Team Leave', href: '/leave/team', icon: CalendarCheck, roles: ['admin', 'manager'], feature: 'leave' },
@@ -121,6 +123,7 @@ export const DASHBOARD_PATHS = [
   '/projects',
   '/clients',
   '/time',
+  '/daily-work',
   '/training',
   '/documents',
   '/reports',

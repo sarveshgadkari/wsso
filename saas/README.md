@@ -14,6 +14,7 @@ After SQL is applied, the app already contains Super Admin, tenant isolation, si
 | 6 | `06_subscription_plans_and_payments.sql` | Dynamic plans Super Admin edits + payment records |
 | 8 | `08_time_log_day_cap.sql` | Caps a work day at 24 hours and clips clock-out at local midnight |
 | 9 | `09_workspace_ops.sql` | **Required for new ops features** — workspace settings, locations, leave types, custom fields, checklists, follow-ups, compliance, recurring jobs |
+| 13 | `13_daily_work.sql` | Daily Work log: categories, review rules, reports |
 
 The same SQL is also copied to `supabase/migrations/20260828000001–03_saas_*.sql` so it stays in git history.
 

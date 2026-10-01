@@ -1056,6 +1056,85 @@ export type Database = {
         ]
       }
 
+      daily_work_entries: {
+        Row: {
+          id: string
+          organization_id: string
+          employee_id: string
+          work_date: string
+          worker_type: 'direct' | '1099' | 'subcontractor'
+          category: 'admin' | 'operations' | 'social_media' | 'marketing' | 'business_development' | 'sales' | 'it' | 'product_development' | 'executive'
+          product: string | null
+          product_detail: string | null
+          executive_role: string | null
+          task: string
+          start_time: string
+          end_time: string
+          hours: number
+          notes: string | null
+          status: 'submitted' | 'done'
+          reviewed_by: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          employee_id: string
+          work_date: string
+          worker_type?: 'direct' | '1099' | 'subcontractor'
+          category: 'admin' | 'operations' | 'social_media' | 'marketing' | 'business_development' | 'sales' | 'it' | 'product_development' | 'executive'
+          product?: string | null
+          product_detail?: string | null
+          executive_role?: string | null
+          task: string
+          start_time: string
+          end_time: string
+          hours: number
+          notes?: string | null
+          status?: 'submitted' | 'done'
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          employee_id?: string
+          work_date?: string
+          worker_type?: 'direct' | '1099' | 'subcontractor'
+          category?: 'admin' | 'operations' | 'social_media' | 'marketing' | 'business_development' | 'sales' | 'it' | 'product_development' | 'executive'
+          product?: string | null
+          product_detail?: string | null
+          executive_role?: string | null
+          task?: string
+          start_time?: string
+          end_time?: string
+          hours?: number
+          notes?: string | null
+          status?: 'submitted' | 'done'
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'daily_work_entries_employee_id_fkey'
+            columns: ['employee_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'daily_work_entries_organization_id_fkey'
+            columns: ['organization_id']
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+
       sticky_notes: {
         Row: {
           id: string

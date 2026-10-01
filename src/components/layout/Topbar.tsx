@@ -21,6 +21,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/clients',            'Clients'],
   ['/crm',                'CRM'],
   ['/my-leads',           'My Leads'],
+  ['/daily-work',         'Daily Work'],
   ['/time/team',          'Team Time'],
   ['/time',               'My Time'],
   ['/leave/team',         'Team Leave'],

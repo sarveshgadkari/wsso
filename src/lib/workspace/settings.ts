@@ -16,6 +16,7 @@ export type WorkspaceFeatureKey =
   | 'compliance'
   | 'followUps'
   | 'recurringJobs'
+  | 'dailyWork'
 
 export type WorkspaceFeatures = Record<WorkspaceFeatureKey, boolean>
 
@@ -60,6 +61,7 @@ export const DEFAULT_WORKSPACE_FEATURES: WorkspaceFeatures = {
   compliance: true,
   followUps: true,
   recurringJobs: true,
+  dailyWork: true,
 }
 
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
@@ -87,6 +89,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
 
 export const FEATURE_LABELS: { key: WorkspaceFeatureKey; label: string; hint: string }[] = [
   { key: 'time', label: 'Time clock', hint: 'Clock in/out and timesheets' },
+  { key: 'dailyWork', label: 'Daily Work', hint: 'Task time by category, with manager and admin review' },
   { key: 'leave', label: 'Leave', hint: 'Time-off requests and approvals' },
   { key: 'approvals', label: 'Approvals inbox', hint: 'One list for leave and clock notes' },
   { key: 'whoIsWorking', label: 'Who is working', hint: 'Live clocked-in board' },
