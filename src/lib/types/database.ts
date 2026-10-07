@@ -1072,6 +1072,8 @@ export type Database = {
           end_time: string
           hours: number
           notes: string | null
+          company_id: string | null
+          project_id: string | null
           status: 'submitted' | 'done'
           reviewed_by: string | null
           reviewed_at: string | null
@@ -1093,6 +1095,8 @@ export type Database = {
           end_time: string
           hours: number
           notes?: string | null
+          company_id?: string | null
+          project_id?: string | null
           status?: 'submitted' | 'done'
           reviewed_by?: string | null
           reviewed_at?: string | null
@@ -1114,12 +1118,20 @@ export type Database = {
           end_time?: string
           hours?: number
           notes?: string | null
+          company_id?: string | null
+          project_id?: string | null
           status?: 'submitted' | 'done'
           reviewed_by?: string | null
           reviewed_at?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: 'daily_work_entries_company_id_fkey'
+            columns: ['company_id']
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
           {
             foreignKeyName: 'daily_work_entries_employee_id_fkey'
             columns: ['employee_id']
@@ -1130,6 +1142,12 @@ export type Database = {
             foreignKeyName: 'daily_work_entries_organization_id_fkey'
             columns: ['organization_id']
             referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'daily_work_entries_project_id_fkey'
+            columns: ['project_id']
+            referencedRelation: 'projects'
             referencedColumns: ['id']
           },
         ]

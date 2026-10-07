@@ -20,6 +20,11 @@ const categoryValues = DAILY_WORK_CATEGORIES.map((row) => row.value) as [string,
 const productValues = PRODUCT_OPTIONS.map((row) => row.value) as [string, ...string[]]
 const executiveValues = EXECUTIVE_ROLES.map((row) => row.value) as [string, ...string[]]
 
+const optionalUuid = z.preprocess(
+  (value) => (value === '' || value === undefined ? null : value),
+  z.string().uuid().nullable(),
+)
+
 const entrySchema = z.object({
   work_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date'),
   worker_type: z.enum(workerValues),
@@ -27,6 +32,8 @@ const entrySchema = z.object({
   product: z.enum(productValues).optional().nullable(),
   product_detail: z.string().trim().max(80).optional().nullable(),
   executive_role: z.enum(executiveValues).optional().nullable(),
+  company_id: optionalUuid,
+  project_id: optionalUuid,
   task: z.string().trim().min(3, 'Describe the task').max(500),
   start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Enter a start time'),
   end_time: z.string().regex(/^\d{2}:\d{2}$/, 'Enter an end time'),
@@ -44,11 +51,17 @@ export type DailyWorkPerson = {
   team_id: string | null
 }
 
+export type DailyWorkCompanyRef = { id: string; name: string; code: string | null }
+export type DailyWorkProjectRef = { id: string; name: string; code: string | null; company_id: string }
+
 export type DailyWorkRow = DailyWorkEntry & {
   employee: DailyWorkPerson | null
+  company: DailyWorkCompanyRef | null
+  project: DailyWorkProjectRef | null
 }
 
 const PERSON_SELECT = 'id, full_name, employee_code, role, manager_id, team_id'
+const ENTRY_SELECT = `*, employee:profiles!daily_work_entries_employee_id_fkey(${PERSON_SELECT}), company:companies!daily_work_entries_company_id_fkey(id, name, code), project:projects!daily_work_entries_project_id_fkey(id, name, code, company_id)`
 
 function fail(message: string): { error: string } {
   return { error: message }
@@ -83,10 +96,49 @@ function normalizeInput(input: DailyWorkInput) {
           ? values.product_detail?.trim() || null
           : null,
       executive_role: values.category === 'executive' ? values.executive_role ?? null : null,
+      company_id: values.company_id ?? null,
+      project_id: values.project_id ?? null,
       notes: values.notes?.trim() || null,
       hours,
     },
   }
+}
+
+async function resolveCompanyAndProject(
+  orgId: string,
+  companyId: string | null,
+  projectId: string | null,
+): Promise<{ company_id: string | null; project_id: string | null } | { error: string }> {
+  const supabase = await createClient()
+  let resolvedCompany = companyId
+  let resolvedProject = projectId
+
+  if (projectId) {
+    const { data: project, error } = await supabase
+      .from('projects')
+      .select('id, company_id, organization_id')
+      .eq('id', projectId)
+      .maybeSingle()
+    if (error) return { error: error.message }
+    if (!project || project.organization_id !== orgId) return { error: 'Choose a valid project.' }
+    if (resolvedCompany && resolvedCompany !== project.company_id) {
+      return { error: 'Project does not belong to the selected company.' }
+    }
+    resolvedCompany = project.company_id
+    resolvedProject = project.id
+  }
+
+  if (resolvedCompany) {
+    const { data: company, error } = await supabase
+      .from('companies')
+      .select('id, organization_id')
+      .eq('id', resolvedCompany)
+      .maybeSingle()
+    if (error) return { error: error.message }
+    if (!company || company.organization_id !== orgId) return { error: 'Choose a valid company.' }
+  }
+
+  return { company_id: resolvedCompany, project_id: resolvedProject }
 }
 
 function isMissingTable(message: string) {
@@ -99,7 +151,7 @@ export async function listMyDailyWork(from: string, to: string): Promise<{ rows:
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('daily_work_entries')
-    .select(`*, employee:profiles!daily_work_entries_employee_id_fkey(${PERSON_SELECT})`)
+    .select(ENTRY_SELECT)
     .eq('employee_id', profile.id)
     .gte('work_date', from)
     .lte('work_date', to)
@@ -119,7 +171,7 @@ export async function listReviewDailyWork(from: string, to: string): Promise<{ r
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('daily_work_entries')
-    .select(`*, employee:profiles!daily_work_entries_employee_id_fkey(${PERSON_SELECT})`)
+    .select(ENTRY_SELECT)
     .eq('organization_id', orgId)
     .gte('work_date', from)
     .lte('work_date', to)
@@ -150,6 +202,8 @@ export async function createDailyWork(input: DailyWorkInput): Promise<{ error?: 
   const normalized = normalizeInput(input)
   if ('error' in normalized && normalized.error) return fail(normalized.error)
   const values = normalized.data!
+  const links = await resolveCompanyAndProject(orgId, values.company_id, values.project_id)
+  if ('error' in links) return fail(links.error)
   const supabase = await createClient()
   const { error } = await supabase.from('daily_work_entries').insert({
     organization_id: orgId,
@@ -160,6 +214,8 @@ export async function createDailyWork(input: DailyWorkInput): Promise<{ error?: 
     product: values.product,
     product_detail: values.product_detail,
     executive_role: values.executive_role,
+    company_id: links.company_id,
+    project_id: links.project_id,
     task: values.task,
     start_time: values.start_time,
     end_time: values.end_time,
@@ -189,6 +245,10 @@ export async function updateDailyWork(id: string, input: DailyWorkInput): Promis
   if (!existing || existing.employee_id !== profile.id) return fail('Entry not found')
   if (existing.status !== 'submitted') return fail('Done entries cannot be edited.')
 
+  const orgId = requireOrgId(profile)
+  const links = await resolveCompanyAndProject(orgId, values.company_id, values.project_id)
+  if ('error' in links) return fail(links.error)
+
   const { error } = await supabase
     .from('daily_work_entries')
     .update({
@@ -198,6 +258,8 @@ export async function updateDailyWork(id: string, input: DailyWorkInput): Promis
       product: values.product,
       product_detail: values.product_detail,
       executive_role: values.executive_role,
+      company_id: links.company_id,
+      project_id: links.project_id,
       task: values.task,
       start_time: values.start_time,
       end_time: values.end_time,

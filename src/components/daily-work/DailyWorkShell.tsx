@@ -38,6 +38,7 @@ import {
   workerTypeLabel,
 } from '@/lib/daily-work/catalog'
 import type { UserRole } from '@/lib/types'
+import type { DailyWorkCompanyOption, DailyWorkProjectOption } from '@/lib/daily-work/picker-types'
 
 type Tab = 'mine' | 'review' | 'report'
 
@@ -47,6 +48,8 @@ interface Props {
   to: string
   mine: DailyWorkRow[]
   review: DailyWorkRow[]
+  companies: DailyWorkCompanyOption[]
+  projects: DailyWorkProjectOption[]
   missingTable: boolean
 }
 
@@ -57,13 +60,23 @@ const emptyForm = (today: string): DailyWorkInput => ({
   product: null,
   product_detail: '',
   executive_role: null,
+  company_id: null,
+  project_id: null,
   task: '',
   start_time: '09:00',
   end_time: '10:00',
   notes: '',
 })
 
-export function DailyWorkShell({ viewerRole, from, to, mine, review, missingTable }: Props) {
+function companyProjectLabel(row: DailyWorkRow) {
+  const company = row.company?.name ?? (row.company_id ? 'Company' : '—')
+  const project = row.project?.name
+  if (project) return `${company} · ${project}`
+  if (row.company?.name) return row.company.name
+  return '—'
+}
+
+export function DailyWorkShell({ viewerRole, from, to, mine, review, companies, projects, missingTable }: Props) {
   const toast = useToast()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -77,6 +90,11 @@ export function DailyWorkShell({ viewerRole, from, to, mine, review, missingTabl
   const isAdmin = viewerRole === 'admin'
   const canReview = viewerRole === 'admin' || viewerRole === 'manager'
   const previewHours = hoursBetween(form.start_time, form.end_time)
+
+  const projectOptions = useMemo(() => {
+    if (!form.company_id) return projects
+    return projects.filter((row) => row.company_id === form.company_id)
+  }, [projects, form.company_id])
 
   const reviewRows = useMemo(() => {
     if (statusFilter === 'all') return review
@@ -113,11 +131,36 @@ export function DailyWorkShell({ viewerRole, from, to, mine, review, missingTabl
       product: row.product,
       product_detail: row.product_detail ?? '',
       executive_role: row.executive_role,
+      company_id: row.company_id,
+      project_id: row.project_id,
       task: row.task,
       start_time: formatClock(row.start_time),
       end_time: formatClock(row.end_time),
       notes: row.notes ?? '',
     })
+  }
+
+  const onCompanyChange = (companyId: string) => {
+    const next = companyId || null
+    setForm((prev) => {
+      const projectStillValid =
+        !prev.project_id || projects.some((p) => p.id === prev.project_id && p.company_id === next)
+      return {
+        ...prev,
+        company_id: next,
+        project_id: projectStillValid ? prev.project_id : null,
+      }
+    })
+  }
+
+  const onProjectChange = (projectId: string) => {
+    const next = projectId || null
+    const project = projects.find((row) => row.id === next)
+    setForm((prev) => ({
+      ...prev,
+      project_id: next,
+      company_id: project ? project.company_id : prev.company_id,
+    }))
   }
 
   if (missingTable) {
@@ -202,6 +245,22 @@ export function DailyWorkShell({ viewerRole, from, to, mine, review, missingTabl
                 {EXECUTIVE_ROLES.map((row) => <option key={row.value} value={row.value}>{row.label}</option>)}
               </Select>
             )}
+            <Select label="Company" value={form.company_id ?? ''} onChange={(e) => onCompanyChange(e.target.value)}>
+              <option value="">None (general time)</option>
+              {companies.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.code ? `${row.code} — ${row.name}` : row.name}
+                </option>
+              ))}
+            </Select>
+            <Select label="Project" value={form.project_id ?? ''} onChange={(e) => onProjectChange(e.target.value)}>
+              <option value="">None</option>
+              {projectOptions.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.code ? `${row.code} — ${row.name}` : row.name}
+                </option>
+              ))}
+            </Select>
             <Input label="Start" type="time" value={form.start_time} onChange={(e) => setField('start_time', e.target.value)} required />
             <Input label="End" type="time" value={form.end_time} onChange={(e) => setField('end_time', e.target.value)} required />
             <div className="md:col-span-2">
@@ -317,6 +376,7 @@ function EntryTable({
         <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-400">
           <tr>
             <th className="px-4 py-3 font-medium">Date</th>
+            <th className="px-4 py-3 font-medium">Company / project</th>
             <th className="px-4 py-3 font-medium">Category</th>
             <th className="px-4 py-3 font-medium">Detail</th>
             <th className="px-4 py-3 font-medium">Task</th>
@@ -330,6 +390,7 @@ function EntryTable({
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-neutral-100 last:border-0">
               <td className="px-4 py-3 whitespace-nowrap">{row.work_date}</td>
+              <td className="px-4 py-3 max-w-[10rem] text-neutral-700">{companyProjectLabel(row)}</td>
               <td className="px-4 py-3">{categoryLabel(row.category)}<div className="text-xs text-neutral-400">{workerTypeLabel(row.worker_type)}</div></td>
               <td className="px-4 py-3">{detailOf(row)}</td>
               <td className="px-4 py-3 max-w-xs">{row.task}</td>
@@ -373,6 +434,7 @@ function ReviewTable({
           <tr>
             <th className="px-4 py-3 font-medium">Person</th>
             <th className="px-4 py-3 font-medium">Date</th>
+            <th className="px-4 py-3 font-medium">Company / project</th>
             <th className="px-4 py-3 font-medium">Category</th>
             <th className="px-4 py-3 font-medium">Task</th>
             <th className="px-4 py-3 font-medium">Hours</th>
@@ -391,6 +453,7 @@ function ReviewTable({
                   <p className="text-xs capitalize text-neutral-400">{person?.role?.replace('_', ' ')} · {person?.employee_code}</p>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">{row.work_date}<div className="text-xs text-neutral-400">{formatClock(row.start_time)}–{formatClock(row.end_time)}</div></td>
+                <td className="px-4 py-3 max-w-[10rem]">{companyProjectLabel(row)}</td>
                 <td className="px-4 py-3">{categoryLabel(row.category)}<div className="text-xs text-neutral-400">{detailOf(row)} · {workerTypeLabel(row.worker_type)}</div></td>
                 <td className="px-4 py-3 max-w-xs">{row.task}</td>
                 <td className="px-4 py-3 tabular-nums">{Number(row.hours).toFixed(2)}</td>
@@ -426,18 +489,22 @@ function StatusBadge({ status }: { status: string }) {
 function ReportPanel({ rows, from, to }: { rows: DailyWorkRow[]; from: string; to: string }) {
   const byCategory = useMemo(() => sumBy(rows, (row) => categoryLabel(row.category)), [rows])
   const byPerson = useMemo(() => sumBy(rows, (row) => row.employee?.full_name ?? 'Unknown'), [rows])
+  const byCompany = useMemo(() => sumBy(rows, (row) => row.company?.name ?? 'General / no company'), [rows])
+  const byProject = useMemo(() => sumBy(rows, (row) => row.project?.name ?? 'No project'), [rows])
   const totalHours = rows.reduce((sum, row) => sum + Number(row.hours), 0)
   const done = rows.filter((row) => row.status === 'done').length
 
   const exportCsv = () => {
     downloadCSV(
       `daily-work-${from}-to-${to}.csv`,
-      ['Date', 'Name', 'Code', 'Role', 'Worker type', 'Category', 'Detail', 'Task', 'Start', 'End', 'Hours', 'Status', 'Notes'],
+      ['Date', 'Name', 'Code', 'Role', 'Company', 'Project', 'Worker type', 'Category', 'Detail', 'Task', 'Start', 'End', 'Hours', 'Status', 'Notes'],
       rows.map((row) => [
         row.work_date,
         row.employee?.full_name,
         row.employee?.employee_code,
         row.employee?.role,
+        row.company?.name ?? '',
+        row.project?.name ?? '',
         workerTypeLabel(row.worker_type),
         categoryLabel(row.category),
         detailOf(row),
@@ -468,6 +535,8 @@ function ReportPanel({ rows, from, to }: { rows: DailyWorkRow[]; from: string; t
       <div id="daily-work-detail" className="grid gap-4 lg:grid-cols-2">
         <HoursChart title="Hours by category" data={byCategory} />
         <HoursChart title="Hours by person" data={byPerson} />
+        <HoursChart title="Hours by company" data={byCompany} />
+        <HoursChart title="Hours by project" data={byProject} />
       </div>
 
       <div className="card overflow-x-auto">

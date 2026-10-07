@@ -58,6 +58,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Work',
     items: [
       { label: 'My Work',      href: '/my-work', icon: Table2, feature: 'myWork' },
+      { label: 'Daily Work',   href: '/daily-work', icon: ClipboardCheck, feature: 'dailyWork' },
       { label: 'TACTICs',      href: '/tactic-documents', icon: FileText },
       { label: 'Work Orders',  href: '/tactics', icon: ClipboardList },
       { label: 'Kanban Board', href: '/kanban',  icon: Kanban, feature: 'kanban' },
@@ -83,7 +84,6 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Time',
     items: [
       { label: 'My Time',   href: '/time',      icon: Clock, feature: 'time' },
-      { label: 'Daily Work', href: '/daily-work', icon: ClipboardCheck, feature: 'dailyWork' },
       { label: 'Team Time', href: '/time/team', icon: CalendarClock, roles: ['admin', 'manager'], feature: 'time' },
       { label: 'My Leave',   href: '/leave',      icon: CalendarOff, feature: 'leave' },
       { label: 'Team Leave', href: '/leave/team', icon: CalendarCheck, roles: ['admin', 'manager'], feature: 'leave' },

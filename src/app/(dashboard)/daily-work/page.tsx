@@ -2,8 +2,11 @@ import { redirect } from 'next/navigation'
 import { requireProfile, getOrganization } from '@/lib/auth/session'
 import { mergeWorkspaceSettings } from '@/lib/workspace/settings'
 import { currentMonthRange } from '@/lib/daily-work/catalog'
+import { createClient } from '@/lib/supabase/server'
+import { requireOrgId } from '@/lib/saas/tenant'
 import { listMyDailyWork, listReviewDailyWork } from '@/lib/actions/daily-work'
 import { DailyWorkShell } from '@/components/daily-work/DailyWorkShell'
+import type { DailyWorkCompanyOption, DailyWorkProjectOption } from '@/lib/daily-work/picker-types'
 
 export const metadata = { title: 'Daily Work — WSSO' }
 
@@ -19,10 +22,16 @@ export default async function DailyWorkPage({ searchParams }: Props) {
   const month = currentMonthRange()
   const from = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.from ?? '') ? searchParams.from! : month.from
   const to = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.to ?? '') ? searchParams.to! : month.to
-  const mine = await listMyDailyWork(from, to)
-  const review = profile.role === 'admin' || profile.role === 'manager'
-    ? await listReviewDailyWork(from, to)
-    : { rows: [], error: undefined }
+  const orgId = requireOrgId(profile)
+  const supabase = await createClient()
+  const [mine, review, companiesRes, projectsRes] = await Promise.all([
+    listMyDailyWork(from, to),
+    profile.role === 'admin' || profile.role === 'manager'
+      ? listReviewDailyWork(from, to)
+      : Promise.resolve({ rows: [], error: undefined }),
+    supabase.from('companies').select('id, name, code').eq('organization_id', orgId).order('name'),
+    supabase.from('projects').select('id, name, code, company_id').eq('organization_id', orgId).order('name'),
+  ])
   const missingTable = mine.error === 'missing_table' || review.error === 'missing_table'
 
   return (
@@ -32,6 +41,8 @@ export default async function DailyWorkPage({ searchParams }: Props) {
       to={to}
       mine={missingTable ? [] : mine.rows}
       review={missingTable ? [] : review.rows}
+      companies={(companiesRes.data ?? []) as DailyWorkCompanyOption[]}
+      projects={(projectsRes.data ?? []) as DailyWorkProjectOption[]}
       missingTable={missingTable}
     />
   )

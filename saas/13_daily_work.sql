@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS public.daily_work_entries (
   end_time         time NOT NULL,
   hours            numeric(6, 2) NOT NULL CHECK (hours > 0 AND hours <= 24),
   notes            text,
+  company_id       uuid REFERENCES public.companies(id) ON DELETE SET NULL,
+  project_id       uuid REFERENCES public.projects(id) ON DELETE SET NULL,
   status           text NOT NULL DEFAULT 'submitted'
                      CHECK (status IN ('submitted', 'done')),
   reviewed_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -35,6 +37,14 @@ CREATE INDEX IF NOT EXISTS daily_work_org_date_idx
 
 CREATE INDEX IF NOT EXISTS daily_work_employee_date_idx
   ON public.daily_work_entries (employee_id, work_date DESC);
+
+CREATE INDEX IF NOT EXISTS daily_work_company_date_idx
+  ON public.daily_work_entries (organization_id, company_id, work_date DESC)
+  WHERE company_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS daily_work_project_date_idx
+  ON public.daily_work_entries (organization_id, project_id, work_date DESC)
+  WHERE project_id IS NOT NULL;
 
 DROP TRIGGER IF EXISTS trg_daily_work_updated_at ON public.daily_work_entries;
 CREATE TRIGGER trg_daily_work_updated_at
@@ -142,5 +152,8 @@ CREATE POLICY "daily_work_delete_own" ON public.daily_work_entries
   );
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.daily_work_entries TO authenticated;
+
+-- Existing installs: if daily_work_entries already exists without company/project, run:
+-- supabase/migrations/20261007000001_daily_work_company_project.sql
 
 NOTIFY pgrst, 'reload schema';
