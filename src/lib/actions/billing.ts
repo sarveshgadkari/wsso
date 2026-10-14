@@ -200,6 +200,9 @@ export async function startCheckout(planId: string, interval: 'month' | 'year') 
   ])
 
   if (!plan || !org) return { error: 'Plan not available' }
+  if (org.billing_source === 'omniforce') {
+    return { error: 'This workspace is billed by Omni Force Vector. Manage the plan there.' }
+  }
 
   const amount = priceForInterval(plan, interval)
   if (amount <= 0) {

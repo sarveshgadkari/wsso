@@ -4,6 +4,7 @@ import { PLAN_LABELS, STATUS_LABELS, formatUsd, isStripeConfigured, orgNeedsPaym
 import { recoverPaidCheckout } from '@/lib/saas/stripe-sync'
 import { Badge } from '@/components/ui/Badge'
 import { BillingCheckout } from '@/components/billing/BillingCheckout'
+import { omniforceConfig } from '@/lib/omniforce/config'
 
 export const metadata = { title: 'Subscription — WSSO' }
 
@@ -24,6 +25,35 @@ export default async function BillingPage({ searchParams }: Props) {
 
   if (!org) {
     return <p className="text-sm text-neutral-500">No workspace found.</p>
+  }
+
+  if (org.billing_source === 'omniforce') {
+    const { count } = await supabaseAdmin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .eq('status', 'active')
+    const hub = omniforceConfig().hubUrl
+    return (
+      <div className="max-w-2xl space-y-4">
+        <h1 className="text-xl font-semibold text-neutral-900">Subscription</h1>
+        <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-neutral-900">Billed by Omni Force Vector</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            This workspace&apos;s plan and seats come from your Omni Force Vector account. There is nothing to pay inside WSSO.
+          </p>
+          <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
+            <div><dt className="text-neutral-500">Plan</dt><dd className="font-medium text-neutral-900">{PLAN_LABELS[org.plan]}</dd></div>
+            <div><dt className="text-neutral-500">Seats used</dt><dd className="font-medium text-neutral-900">{count ?? 0} of {org.seat_limit}</dd></div>
+          </dl>
+          {hub && (
+            <a href={`${hub}/app/m/wsso`} className="mt-5 inline-flex rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+              Manage in Omni Force Vector
+            </a>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (searchParams.success === '1' && orgNeedsPayment(org)) {

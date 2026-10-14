@@ -12,7 +12,7 @@ const PUBLIC_PATHS = new Set([
   '/privacy',
   '/refunds',
 ])
-const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/', '/api/signup', '/api/billing/webhook', '/api/cron']
+const PUBLIC_PREFIXES = ['/auth/', '/api/public/', '/api/mcp/', '/api/signup', '/api/billing/webhook', '/api/cron', '/api/omniforce/']
 
 const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password', '/signup'])
 

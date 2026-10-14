@@ -32,6 +32,9 @@ export type Database = {
           billing_interval: 'month' | 'year' | null
           current_period_end: string | null
           settings: Record<string, unknown>
+          billing_source: 'wsso' | 'omniforce'
+          omniforce_owner_user_id: string | null
+          omniforce_organization_id: string | null
           created_at: string
           updated_at: string
         }
@@ -52,6 +55,9 @@ export type Database = {
           billing_interval?: 'month' | 'year' | null
           current_period_end?: string | null
           settings?: Record<string, unknown>
+          billing_source?: 'wsso' | 'omniforce'
+          omniforce_owner_user_id?: string | null
+          omniforce_organization_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -72,6 +78,9 @@ export type Database = {
           billing_interval?: 'month' | 'year' | null
           current_period_end?: string | null
           settings?: Record<string, unknown>
+          billing_source?: 'wsso' | 'omniforce'
+          omniforce_owner_user_id?: string | null
+          omniforce_organization_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -82,6 +91,28 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+
+      omniforce_events: {
+        Row: {
+          event_id: string
+          event: string
+          payload: Record<string, unknown>
+          received_at: string
+        }
+        Insert: {
+          event_id: string
+          event: string
+          payload?: Record<string, unknown>
+          received_at?: string
+        }
+        Update: {
+          event_id?: string
+          event?: string
+          payload?: Record<string, unknown>
+          received_at?: string
+        }
+        Relationships: []
       }
 
       subscription_plans: {
@@ -204,6 +235,8 @@ export type Database = {
           location_id: string | null
           backup_approver_id: string | null
           status: Database['public']['Enums']['profile_status']
+          omniforce_user_id: string | null
+          omniforce_linked_at: string | null
           created_at: string
           updated_at: string
         }
@@ -223,6 +256,8 @@ export type Database = {
           location_id?: string | null
           backup_approver_id?: string | null
           status?: Database['public']['Enums']['profile_status']
+          omniforce_user_id?: string | null
+          omniforce_linked_at?: string | null
           created_at?: string
           updated_at?: string
         }
